@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bio-gene-to-reference-tree:plan:0.2",
+  "title": "Gene-to-reference-tree plan 0.2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_id",
+    "run_id",
+    "state",
+    "objective",
+    "query_resolution",
+    "reference_discovery",
+    "clustering_plan",
+    "alignment_plan",
+    "trimming_plan",
+    "tree_plan",
+    "annotation_plan",
+    "literature_plan",
+    "decision_gates",
+    "planned_commands",
+    "plan_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.2"},
+    "state": {
+      "enum": ["pending-clustering", "blocked", "pending-reference-approval"]
+    },
+    "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "decision_gates": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"type": "object", "required": ["id", "status", "requires"]}
+    },
+    "planned_commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "stage", "tool", "argv", "status", "executed"],
+        "properties": {
+          "argv": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "executed": {"const": false}
+        }
+      }
+    }
+  }
+}

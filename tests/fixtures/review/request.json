@@ -1,0 +1,49 @@
+{
+  "schema_version": "0.1",
+  "project_id": "synthetic-order-invariance-review",
+  "objective": "ortholog-tree",
+  "query": {
+    "kind": "protein-fasta",
+    "path": "query.faa",
+    "id": "QUERY_001",
+    "organism": "Synthetic query species"
+  },
+  "taxon_scope": {
+    "ingroup": "Synthetic vertebrates",
+    "outgroup": "Synthetic arthropods"
+  },
+  "privacy": {
+    "remote_search_allowed": false
+  },
+  "references": {
+    "strategy": "ortholog-first",
+    "candidate_table": "candidates.tsv",
+    "candidate_fasta": "candidates.faa"
+  },
+  "selection": {
+    "min_query_coverage": 0.7,
+    "min_length_ratio": 0.6,
+    "max_length_ratio": 1.6,
+    "max_per_taxon": 1,
+    "max_references": 3,
+    "min_ingroup_taxa": 2,
+    "require_outgroup": true,
+    "outgroup_count": 1,
+    "allow_paralogs": false
+  },
+  "alignment": {
+    "tool": "mafft",
+    "mode": "auto",
+    "trim": false
+  },
+  "tree": {
+    "tool": "iqtree2",
+    "model": "MFP",
+    "ufboot": 1000,
+    "sh_alrt": 1000,
+    "bnni": true,
+    "threads": 4,
+    "seed": 12345,
+    "rooting": "outgroup"
+  }
+}

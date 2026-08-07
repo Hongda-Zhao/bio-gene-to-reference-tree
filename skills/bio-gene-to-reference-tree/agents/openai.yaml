@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gene-to-Reference Tree"
+  short_description: "Build auditable protein gene trees end to end"
+  default_prompt: "Use $bio-gene-to-reference-tree to resolve my protein, curate references and outgroups, and plan an annotated, literature-aware gene tree."

@@ -1,0 +1,9 @@
+accession	taxon_id	species	role	relation	is_reviewed	is_canonical	is_fragment	query_coverage	sequence_length	bitscore	evalue	source_db	source_release	retrieved_at	clade
+CHICKEN_OK	9031	Synthetic chicken	ingroup	one2one_ortholog	true	true	false	0.92	41	205	1e-60	synthetic-fixture	1	2026-01-01	Aves
+FLY_OUT	7227	Synthetic fly	outgroup	ortholog	true	true	false	0.88	41	150	1e-40	synthetic-fixture	1	2026-01-01	Arthropoda
+MOUSE_CAN	10090	Synthetic mouse	ingroup	one2one_ortholog	true	true	false	0.97	41	235	1e-70	synthetic-fixture	1	2026-01-01	Mammalia
+QUERY_001	9606	Synthetic query species	ingroup	self	true	true	false	1.00	41	300	0	synthetic-fixture	1	2026-01-01	Mammalia
+BEETLE_OUT	7070	Synthetic beetle	outgroup	ortholog	true	true	false	0.80	41	130	1e-30	synthetic-fixture	1	2026-01-01	Arthropoda
+FISH_PARALOG	7955	Synthetic fish	ingroup	paralog	true	true	false	0.93	41	190	1e-55	synthetic-fixture	1	2026-01-01	Actinopterygii
+FROG_FRAGMENT	8355	Synthetic frog	ingroup	ortholog	true	true	true	0.40	41	105	1e-18	synthetic-fixture	1	2026-01-01	Amphibia
+MOUSE_ALT	10090	Synthetic mouse	ingroup	ortholog	true	false	false	0.99	41	245	1e-80	synthetic-fixture	1	2026-01-01	Mammalia

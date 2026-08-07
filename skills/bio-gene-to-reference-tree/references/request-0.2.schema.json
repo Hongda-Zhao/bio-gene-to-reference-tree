@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bio-gene-to-reference-tree:request:0.2",
+  "title": "Gene-to-reference-tree request 0.2",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project_id",
+    "objective",
+    "query",
+    "taxon_scope",
+    "privacy",
+    "references",
+    "selection",
+    "alignment",
+    "tree"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.2"},
+    "project_id": {"type": "string", "minLength": 1},
+    "objective": {
+      "enum": ["ortholog-tree", "homolog-context", "within-species"]
+    },
+    "sequence_context": {"enum": ["cellular", "viral"]},
+    "query": {
+      "type": "object",
+      "required": ["kind", "path", "id", "organism"],
+      "properties": {
+        "kind": {
+          "enum": ["protein-fasta", "accession", "protein-name", "gene-symbol"]
+        },
+        "path": {"type": "string", "minLength": 1},
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]+$"},
+        "organism": {"type": "string", "minLength": 1},
+        "taxon_id": {"type": "string", "pattern": "^[0-9]*$"}
+      }
+    },
+    "taxon_scope": {
+      "type": "object",
+      "required": ["ingroup", "outgroup"],
+      "properties": {
+        "ingroup": {"type": "string", "minLength": 1},
+        "outgroup": {"type": "string"}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["remote_search_allowed"],
+      "properties": {
+        "remote_search_allowed": {"type": "boolean"},
+        "unpublished_sequence": {"type": "boolean"}
+      }
+    },
+    "references": {
+      "type": "object",
+      "required": ["strategy", "candidate_table", "candidate_fasta"],
+      "properties": {
+        "strategy": {"enum": ["ortholog-first", "homolog-first", "local-bundle"]},
+        "candidate_table": {"type": "string", "minLength": 1},
+        "candidate_fasta": {"type": "string", "minLength": 1},
+        "discovery_tiers": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "required": [
+        "min_query_coverage",
+        "min_target_coverage",
+        "min_length_ratio",
+        "max_length_ratio",
+        "max_per_taxon",
+        "max_references",
+        "min_ingroup_taxa",
+        "require_outgroup",
+        "outgroup_count",
+        "allow_paralogs"
+      ],
+      "properties": {
+        "min_query_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "min_target_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "min_length_ratio": {"type": "number", "minimum": 0},
+        "max_length_ratio": {"type": "number", "minimum": 0},
+        "max_per_taxon": {"type": "integer", "minimum": 1},
+        "max_references": {"type": "integer", "minimum": 1},
+        "min_ingroup_taxa": {"type": "integer", "minimum": 1},
+        "require_outgroup": {"type": "boolean"},
+        "outgroup_count": {"type": "integer", "minimum": 0},
+        "allow_paralogs": {"type": "boolean"}
+      }
+    },
+    "clustering": {
+      "type": "object",
+      "properties": {
+        "mode": {"enum": ["off", "auto", "precomputed"]},
+        "tool": {"const": "mmseqs2"},
+        "algorithm": {"enum": ["easy-linclust", "easy-cluster"]},
+        "min_seq_id": {"type": "number", "minimum": 0, "maximum": 1},
+        "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "coverage_mode": {"type": "integer", "minimum": 0, "maximum": 5}
+      }
+    },
+    "alignment": {
+      "type": "object",
+      "required": ["tool", "mode"],
+      "properties": {
+        "tool": {"const": "mafft"},
+        "mode": {"enum": ["auto", "linsi", "ginsi", "einsi"]},
+        "threads": {"type": "integer", "minimum": 1}
+      }
+    },
+    "trimming": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "tool": {"const": "trimal"},
+        "primary_profile": {"type": "string"},
+        "profiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "gap_threshold"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+              "gap_threshold": {"type": "number", "minimum": 0, "maximum": 1}
+            }
+          }
+        }
+      }
+    },
+    "tree": {
+      "type": "object",
+      "required": ["mode", "tool", "rooting", "support"],
+      "properties": {
+        "mode": {"enum": ["fast", "accurate"]},
+        "tool": {"enum": ["fasttree", "iqtree2"]},
+        "rooting": {"enum": ["unrooted", "outgroup"]},
+        "support": {
+          "type": "object",
+          "required": ["method"],
+          "properties": {
+            "method": {"enum": ["sh-like-local", "ultrafast", "standard-bootstrap"]},
+            "replicates": {"type": "integer", "minimum": 0},
+            "sh_alrt": {"type": "integer", "minimum": 0},
+            "bnni": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "itol": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "dataset_label": {"type": "string", "minLength": 1},
+        "colors": {
+          "type": "object",
+          "required": ["study", "expanded", "outgroup"],
+          "properties": {
+            "study": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+            "expanded": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+            "outgroup": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+          }
+        },
+        "generate_ranges_after_tree_qc": {"type": "boolean"}
+      }
+    },
+    "literature": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "years_back": {"type": "integer", "minimum": 1},
+        "include_foundational": {"type": "boolean"},
+        "taxon_fallback_ranks": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "sources": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

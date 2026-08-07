@@ -1,0 +1,14 @@
+{
+  "selected_accessions": [
+    "QUERY_001",
+    "MOUSE_CAN",
+    "CHICKEN_OK",
+    "FLY_OUT"
+  ],
+  "rejected_reason_codes": {
+    "MOUSE_ALT": "PER_TAXON_LIMIT",
+    "FROG_FRAGMENT": "LOW_QUERY_COVERAGE",
+    "FISH_PARALOG": "RELATION_NOT_ALLOWED",
+    "BEETLE_OUT": "OUTGROUP_LIMIT"
+  }
+}
