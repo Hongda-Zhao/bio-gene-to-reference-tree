@@ -33,6 +33,14 @@ When several transcripts or isoforms resolve:
 
 Never default a symbol to human or another model organism.
 
+## Organism-name and TaxID validation
+
+When a TaxID must be assigned from an organism name, prefer already-extracted `names.dmp` and `nodes.dmp` files from one verified official NCBI Taxonomy snapshot. Match the supplied text character for character to `names.dmp` `name_txt`, restrict accepted rows to `name class = scientific name`, require exactly one unique TaxID, and confirm that TaxID exists in the same snapshot's `nodes.dmp`.
+
+Do not trim, case-fold, normalize punctuation or Unicode, remove taxonomic qualifiers, accept substrings, or silently promote a synonym, equivalent name, common name, or misspelling. Secondary-name matches may be reported only as diagnostics. Stop when there is no exact scientific-name match, more than one TaxID matches, the node is absent, or an existing TaxID disagrees with the resolved TaxID.
+
+Keep name resolution separate from phylogenetic inference. `names.dmp` maps names to TaxIDs; `nodes.dmp` validates current nodes and supplies parent/rank classification. Neither proves an evolutionary topology or makes an outgroup suitable. Record the snapshot label, exact official archive URL, retrieval time, and SHA-256 of both files in `taxonomy_resolution.tsv` and the manifest. Never invent the snapshot date from file modification times.
+
 ## Raw-protein route
 
 1. Validate the amino-acid alphabet, sequence length, internal stop characters, ambiguous residues, low complexity, signal peptides, repeats, and probable transmembrane regions.
@@ -71,6 +79,8 @@ Obtain explicit permission before transmitting unpublished sequences or unpublis
 ## Primary documentation
 
 - NCBI Datasets gene metadata: <https://www.ncbi.nlm.nih.gov/datasets/docs/how-tos/genes/get-gene-metadata/>
+- NCBI Taxonomy dump files: <https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/new_taxdump/>
+- NCBI taxdump field definitions: <https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/new_taxdump/taxdump_readme.txt>
 - NCBI BLAST database descriptions: <https://www.ncbi.nlm.nih.gov/books/NBK62345/>
 - UniProt REST entry retrieval: <https://www.uniprot.org/help/api_retrieve_entries>
 - InterProScan introduction: <https://interproscan-docs.readthedocs.io/en/v5/Introduction.html>

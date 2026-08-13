@@ -1,0 +1,6 @@
+tip_id	analysis_role	inclusion_status	species	accession
+QUERY_001	study	selected	Homo sapiens	QUERY_001
+MOUSE_CAN	expanded	selected	Mus musculus	MOUSE_CAN
+CHICKEN_OK	expanded	selected	Gallus gallus	CHICKEN_OK
+CIONA_OUT	outgroup	selected	Ciona intestinalis	CIONA_OUT
+REJECTED_1	expanded	rejected	Danio rerio	REJECTED_1

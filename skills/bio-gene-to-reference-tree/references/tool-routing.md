@@ -7,6 +7,7 @@ Use the narrowest authoritative source or local executable available. Inspect ca
 | Need | Preferred route | Guardrail |
 |---|---|---|
 | NCBI/RefSeq accession | NCBI E-utilities or Datasets | Retain accession.version, status, and TaxID |
+| Organism name → TaxID | Local official NCBI `names.dmp` + `nodes.dmp` | Accept one exact `scientific name` match only; stop on aliases, ambiguity, or mismatch |
 | UniProt accession | UniProt REST | Preserve reviewed status and exact isoform |
 | Ensembl-supported symbol | Ensembl lookup, then ID-based retrieval | Require source species; symbols are not global |
 | General gene/protein name | NCBI/UniProt/Ensembl name search plus literature disambiguation | Retrieve sequence from a database, not prose |
@@ -31,6 +32,7 @@ Do not average confidence values across orthology resources. Treat disagreement 
 | Accurate ML tree | IQ-TREE2 | Distinguish UFBoot `-B` from standard bootstrap `-b` |
 | Rooting/tree I/O | Annotation-preserving tree tool | Require approved outgroup and keep unrooted tree |
 | Tip annotation | Local iTOL-format writer | Upload only with separate remote permission |
+| Local tree figure | `Rscript` with bundled ggtree/ggplot2 renderer | Exact tip-ID join; SVG/PDF plus settings TSV; never install packages automatically |
 
 Before execution, run the bundled `doctor` command or inspect each executable with its version/help flag. If a required executable is missing or incompatible, stop after planning. Do not silently substitute another algorithm.
 
@@ -39,7 +41,8 @@ Before execution, run the bundled `doctor` command or inspect each executable wi
 - Search primary literature using a scholarly index available to the host agent.
 - Prefer DOI/PMID-linked records and directly relevant phylogenomic studies.
 - Use Open Tree of Life as synthesis/discovery context, not sole truth.
-- Use NCBI Taxonomy for nomenclature/classification and do not describe Common Tree as a statistical phylogeny.
+- Use one verified NCBI Taxonomy dump snapshot for nomenclature/classification. Resolve names through exact `names.dmp` scientific-name equality and confirm TaxIDs in the same snapshot's `nodes.dmp`; do not fuzzy-match or select the first ambiguous record.
+- Do not describe NCBI Common Tree or taxdump parent links as a statistically inferred phylogeny.
 - Use ICTV for current formal virus taxonomy.
 - Escalate species → genus → family → order only when direct evidence is unavailable and label the result indirect.
 
@@ -53,7 +56,9 @@ If network access is unavailable or disallowed, require local query, candidate T
 
 ## Bundled helper boundary
 
-Use `scripts/gene_to_tree.py plan` only with local files. It validates a resolved protein and local candidate bundle, applies deterministic selection rules, emits metadata and iTOL roles, and plans commands. It does not perform network access, CDS translation, taxonomy validation, literature search, alignment, trimming, tree inference, rooting, or iTOL upload.
+Use `scripts/gene_to_tree.py plan` only with local files. It validates a resolved protein and local candidate bundle, optionally validates organism/TaxID pairs against user-supplied local `names.dmp` and `nodes.dmp`, applies deterministic selection rules, emits metadata and iTOL roles, and plans commands. It does not download or extract taxonomy files, perform network access, translate CDS, search literature, align or trim sequences, infer or root a tree, render a figure, or upload to iTOL.
+
+Use `scripts/render_tree_ggtree.R` only after the tree and metadata tip sets are approved. It requires local `ape`, `ggplot2`, `ggtree`, `openssl`, and `svglite`; it checks for missing packages but never installs them or contacts the network.
 
 When the host agent has separate authorized capabilities, perform acquisition or execution outside the helper, materialize the documented handoff files, and re-run planning after every decision-bearing change.
 

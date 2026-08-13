@@ -6,7 +6,7 @@
 
 **Build the reference set before you build the tree.**
 
-An open, portable Agent Skill for taking a protein accession, amino-acid sequence, or protein/gene name plus organism through query resolution, reference and outgroup curation, MAFFT/trimAl, FastTree or IQ-TREE2, iTOL annotation, and current-literature comparison.
+An open, portable Agent Skill for taking a protein accession, amino-acid sequence, or protein/gene name plus organism through query resolution, optional exact NCBI Taxonomy validation, reference and outgroup curation, MAFFT/trimAl, FastTree or IQ-TREE2, iTOL annotation, local ggtree/ggplot2 figures, and current-literature comparison.
 
 Unlike a “top N BLAST hits → alignment → tree” recipe, it keeps paralogs, fragments, isoforms, domain-only matches, redundant taxa, outgroups, thresholds, exclusions, and approval decisions visible in an auditable handoff.
 
@@ -15,7 +15,7 @@ Unlike a “top N BLAST hits → alignment → tree” recipe, it keeps paralogs
 - **Start with:** a protein accession, a raw amino-acid sequence, or a protein/gene name plus organism.
 - **Make explicit:** query identity, biological objective, candidate provenance, ortholog/paralog policy, taxonomic sampling, and outgroup rationale.
 - **Review before inference:** selected and rejected references, raw-alignment QC, trimming sensitivity, rooting, model, and support semantics.
-- **Leave an audit trail:** stable reason codes, hashes, exact argument arrays, iTOL annotations, complete sequence metadata, and a literature-evidence plan.
+- **Leave an audit trail:** stable reason codes, hashes, exact argument arrays, optional taxdump evidence, iTOL annotations, local figure settings, complete sequence metadata, and a literature-evidence plan.
 - **Use across agents:** the installable directory follows the open [Agent Skills specification](https://agentskills.io/specification) and contains no vendor-specific workflow instructions.
 
 ## Quick start
@@ -46,7 +46,7 @@ Invoke it directly:
 - Codex: `$bio-gene-to-reference-tree Build an auditable protein gene tree for accession XP_012345678.1.`
 - Claude Code: `/bio-gene-to-reference-tree Build an auditable protein gene tree for accession XP_012345678.1.`
 
-An agent may also load the skill automatically for requests about resolving protein accessions or sequences, selecting phylogenetic references and outgroups, aligning and trimming proteins, inferring a FastTree/IQ-TREE tree, or generating iTOL annotations.
+An agent may also load the skill automatically for requests about resolving protein accessions or sequences, validating species names against NCBI taxdump files, selecting phylogenetic references and outgroups, aligning and trimming proteins, inferring a FastTree/IQ-TREE tree, or generating iTOL or ggtree/ggplot2 outputs.
 
 To inspect the deterministic core without database access or bioinformatics executables, run the [offline review example](#run-the-offline-review-example).
 
@@ -60,22 +60,23 @@ This skill makes every inclusion, exclusion, threshold, role, command, and appro
 
 | Decision point | Common shortcut | This skill retains |
 |---|---|---|
-| Query identity | Trust a label or unversioned hit | Authoritative namespace, accession version, organism/TaxID, source release, retrieval time, and sequence SHA-256 |
+| Query identity | Trust a label or unversioned hit | Authoritative namespace, accession version, organism/TaxID, optional exact scientific-name evidence from one NCBI taxdump snapshot, source release, retrieval time, and sequence SHA-256 |
 | Reference curation | Keep the highest-scoring hits | Full candidate pool, orthology evidence, coverage/domain checks, balanced sampling, and deterministic rejection reasons |
 | Outgroup and rooting | Choose the most distant hit or midpoint-root automatically | Candidate rationales, taxonomic evidence, unrooted tree, and a separately approved rooted copy |
 | Alignment and trimming | Use one opaque preset | Raw MSA, QC metrics, every trim profile, retained-column fractions, and topology sensitivity |
 | Inference | Report “bootstrap” without its method | Exact model/support method, seed, tool version, argument array, and support semantics |
-| Interpretation | Put all meaning in tip labels | iTOL role files, complete metadata TSV, current literature/taxonomy evidence, conflicts, and limitations |
+| Interpretation | Put all meaning in tip labels | iTOL role files, local SVG/PDF figures plus renderer settings, complete metadata TSV, current literature/taxonomy evidence, conflicts, and limitations |
 
 ## Execution boundary
 
-> **Status: v0.2 review candidate.** The Agent Skill specifies the complete workflow. Its bundled standard-library Python helper is deliberately offline and deterministic: it validates a resolved local protein/candidate bundle, selects references, emits iTOL roles and metadata, and compiles unexecuted MMseqs2/MAFFT/trimAl/FastTree/IQ-TREE2 plans. Live database access, literature retrieval, and external-tool execution use separately authorized capabilities supplied by the host agent or local environment.
+> **Status: v0.3 review candidate.** The Agent Skill specifies the complete workflow. Its bundled standard-library Python helpers are deliberately offline and deterministic: they validate a resolved local protein/candidate bundle, optionally validate organism/TaxID pairs against local NCBI taxdump files, select references, emit iTOL roles and metadata, and compile unexecuted MMseqs2/MAFFT/trimAl/FastTree/IQ-TREE2 plans. The local R renderer creates ggtree/ggplot2 SVG/PDF figures only when explicitly run after tree inference. Live database access, literature retrieval, and external-tool execution use separately authorized capabilities supplied by the host agent or local environment.
 
 ## Workflow
 
 ```text
 accession | raw protein | name + organism
   -> authoritative query resolution
+  -> optional exact NCBI scientific-name/TaxID validation
   -> ortholog-first or homolog-first discovery
   -> taxonomically balanced references + candidate outgroups
   -> optional role-aware MMseqs2 clustering
@@ -85,7 +86,7 @@ accession | raw protein | name + organism
   -> alignment/trimming approval
   -> FastTree exploration or IQ-TREE2 primary inference
   -> unrooted tree + optional approved rooted copy
-  -> iTOL roles + full metadata
+  -> iTOL roles + local ggtree/ggplot2 figure + full metadata
   -> current phylogenetic literature/taxonomy comparison
 ```
 
@@ -101,12 +102,14 @@ The workflow supports:
 | Capability | Skill instructions | Bundled helper | Host/local capability |
 |---|---:|---:|---:|
 | Classify accession/raw/name input | Yes | Validates materialized handoff | Live resolver required |
+| Exact NCBI scientific name → TaxID | Yes | Validates local `names.dmp` + `nodes.dmp` | Verified taxdump snapshot required |
 | RefSeq → UniProt/nr → profile/domain fallback | Yes | Records configured tiers | Database/search tools required |
 | Reference/outgroup selection | Yes | Deterministic | Taxonomy evidence supplied by host |
 | Conditional MMseqs2 clustering | Yes | Plans/gates/re-imports cluster IDs | MMseqs2 execution required |
 | MAFFT and trimAl profiles | Yes | Emits exact argv arrays | Executables required |
 | FastTree or IQ-TREE2 | Yes | Emits support-aware argv arrays | Executables required |
 | iTOL role annotation | Yes | Generates `DATASET_COLORSTRIP` | Upload optional and permission-gated |
+| ggtree/ggplot2 visualization | Yes | Bundled fail-closed R renderer | R + local packages required |
 | Full sequence metadata | Yes | Generates TSV | — |
 | Recent phylogenetic evidence | Yes | Emits search plan only | Literature/taxonomy access required |
 | Network-free review bundle | Yes | Fully implemented | Python 3.10+ only |
@@ -117,7 +120,10 @@ The workflow supports:
 skills/bio-gene-to-reference-tree/
   SKILL.md
   agents/openai.yaml
-  scripts/gene_to_tree.py
+  scripts/
+    gene_to_tree.py
+    ncbi_taxonomy.py
+    render_tree_ggtree.R
   references/
   assets/
 tests/
@@ -144,6 +150,7 @@ The helper refuses to overwrite an existing output directory and creates:
 - `rejected_references.tsv` with stable reason codes;
 - `reference_set.faa`;
 - `sequence_metadata.tsv` covering selected and rejected candidates;
+- `taxonomy_resolution.tsv` when optional local NCBI taxdump validation is enabled;
 - `itol_roles.txt` using official `DATASET_COLORSTRIP` syntax;
 - `plan.json` with two approval gates and argv arrays;
 - `manifest.json` with hashes, provenance, and zero executed network/process calls.
@@ -162,6 +169,43 @@ Run tests:
 python3 -m unittest discover -s tests -v
 ```
 
+## Validate organism names against NCBI taxdump
+
+Supply already-extracted `names.dmp` and `nodes.dmp` from one verified official NCBI Taxonomy snapshot. The resolver performs character-for-character matching against `name_txt` rows whose `name class` is exactly `scientific name`; it never case-folds, trims, fuzzy-matches, accepts an alias, or chooses the first ambiguous record.
+
+```bash
+python3 skills/bio-gene-to-reference-tree/scripts/ncbi_taxonomy.py \
+  --names taxonomy/names.dmp \
+  --nodes taxonomy/nodes.dmp \
+  --snapshot new_taxdump-YYYY-MM-DD \
+  --source-url https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.tar.gz \
+  --retrieved-at YYYY-MM-DD \
+  --input candidates.tsv \
+  --out taxonomy_resolution.tsv
+```
+
+The local resolver downloads nothing. It stops on no exact scientific-name match, ambiguity, malformed dump records, a missing node, or disagreement between the resolved and supplied TaxID. Enable the optional `taxonomy` object in a planning request to include the dump hashes and resolution table in the review bundle and its decision-bearing plan hash.
+
+## Render a local ggtree/ggplot2 figure
+
+After tree inference and topology review, render the approved Newick file locally:
+
+```bash
+Rscript skills/bio-gene-to-reference-tree/scripts/render_tree_ggtree.R \
+  --tree tree/gene-tree.unrooted.treefile \
+  --metadata annotation/sequence_metadata.tsv \
+  --itol-roles annotation/itol_roles.txt \
+  --out-prefix figures/gene-tree.unrooted.ggtree \
+  --root-state unrooted \
+  --layout rectangular \
+  --branch-length auto \
+  --support-format sh-alrt/ufboot \
+  --show-tip-labels true \
+  --width 10 --height 8
+```
+
+The renderer requires local `ape`, `ggplot2`, `ggtree`, `openssl`, and `svglite` packages. It never installs packages, opens a network connection, reroots or ladderizes the tree, or guesses support semantics. It requires exact equality between Newick tips and selected metadata tip IDs; an `outgroup-rooted` declaration also requires a structural root split that isolates the selected outgroup tips. It refuses overwrite and writes SVG, PDF, and a settings TSV.
+
 ## Optional local tools
 
 | Stage | Executable | Notes |
@@ -171,12 +215,14 @@ python3 -m unittest discover -s tests -v
 | Trimming sensitivity | `trimal` | Raw alignment is always preserved |
 | Fast exploration | `FastTree` | SH-like local support is not bootstrap |
 | Primary ML inference | `iqtree2` | UFBoot `-B` and standard bootstrap `-b` are distinct |
+| Local tree figure | `Rscript` | Requires `ape`, `ggplot2`, `ggtree`, `openssl`, and `svglite`; no automatic installation |
 
-The project never downloads or silently substitutes these executables.
+The project never downloads, installs, or silently substitutes these executables or R packages.
 
 ## Scientific guardrails
 
 - Require organism or TaxID for a protein/gene name.
+- Accept an automatically assigned TaxID only from one unique, exact NCBI `scientific name` match; stop on aliases, fuzzy matches, and ambiguity.
 - Never obtain an exact sequence from prose or model memory.
 - Never infer orthology from the top similarity hit alone.
 - Never treat MMseqs2 `-c` as percent identity.

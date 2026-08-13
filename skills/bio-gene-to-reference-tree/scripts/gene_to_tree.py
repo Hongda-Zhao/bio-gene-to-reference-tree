@@ -25,12 +25,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tuple
 
+from ncbi_taxonomy import (
+    NameRequest,
+    TaxonomyError,
+    TaxonomyResolution,
+    resolve_exact_scientific_names,
+    write_resolution_tsv,
+)
 
-VERSION = "0.2.0"
-OUTPUT_SCHEMA_VERSION = "0.2"
+
+VERSION = "0.3.0"
+OUTPUT_SCHEMA_VERSION = "0.3"
 PROTEIN_ALPHABET = frozenset("ACDEFGHIKLMNPQRSTVWYBXZJUO")
 SAFE_ID = re.compile(r"^[A-Za-z0-9_.:-]+$")
 SAFE_PROFILE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+ASCII_TAXON_ID = re.compile(r"[0-9]+")
 RELATION_PRIORITY = {
     "one2one_ortholog": 0,
     "ortholog": 1,
@@ -414,6 +423,14 @@ def parse_candidate_table(path: Path, sequences: Mapping[str, str]) -> List[Cand
                     raise WorkflowError(
                         "INVALID_CANDIDATE_TABLE", f"Candidate table row {row_number} has extra columns."
                     )
+                for exact_field in ("species", "taxon_id"):
+                    exact_value = raw.get(exact_field) or ""
+                    if exact_value != exact_value.strip():
+                        raise WorkflowError(
+                            "NONEXACT_TAXONOMY_FIELD",
+                            f"Candidate row {row_number} field '{exact_field}' has leading or trailing "
+                            "whitespace; exact taxonomy matching never normalizes it silently.",
+                        )
                 row = {
                     key: (raw.get(key) or "").strip()
                     for key in REQUIRED_COLUMNS + OPTIONAL_COLUMNS
@@ -431,7 +448,7 @@ def parse_candidate_table(path: Path, sequences: Mapping[str, str]) -> List[Cand
                         "CANDIDATE_SEQUENCE_MISMATCH",
                         f"Candidate table accession '{accession}' is absent from the candidate FASTA.",
                     )
-                if not row["taxon_id"].isdigit():
+                if not ASCII_TAXON_ID.fullmatch(row["taxon_id"]):
                     raise WorkflowError(
                         "INVALID_CANDIDATE_TABLE", f"{accession}: taxon_id must contain only digits."
                     )
@@ -639,9 +656,16 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
     query_id = string_at(query, "id")
     if not SAFE_ID.fullmatch(query_id):
         raise WorkflowError("UNSAFE_SEQUENCE_ID", f"Query ID '{query_id}' contains unsupported characters.")
+    raw_query_organism = query.get("organism")
+    if isinstance(raw_query_organism, str) and raw_query_organism != raw_query_organism.strip():
+        raise WorkflowError(
+            "NONEXACT_TAXONOMY_FIELD",
+            "query.organism has leading or trailing whitespace; exact taxonomy matching never "
+            "normalizes it silently.",
+        )
     query_organism = string_at(query, "organism")
     query_taxon_id = optional_string(query, "taxon_id")
-    if query_taxon_id and not query_taxon_id.isdigit():
+    if query_taxon_id and not ASCII_TAXON_ID.fullmatch(query_taxon_id):
         raise WorkflowError("INVALID_REQUEST", "query.taxon_id must contain only digits when provided.")
     if query_kind in {"protein-name", "gene-symbol"} and not (query_organism or query_taxon_id):
         raise WorkflowError(
@@ -872,6 +896,71 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
         "rooting": rooting,
     }
 
+    taxonomy_raw = optional_mapping(request, "taxonomy")
+    if "taxonomy" in request:
+        allowed_taxonomy_keys = {
+            "enabled",
+            "source",
+            "match_mode",
+            "names_dmp",
+            "nodes_dmp",
+            "snapshot",
+            "source_url",
+            "retrieved_at",
+        }
+        unknown_taxonomy_keys = sorted(set(taxonomy_raw) - allowed_taxonomy_keys)
+        if unknown_taxonomy_keys:
+            raise WorkflowError(
+                "INVALID_TAXONOMY_PLAN",
+                "Unknown taxonomy fields: " + ", ".join(unknown_taxonomy_keys),
+            )
+        if "enabled" not in taxonomy_raw:
+            raise WorkflowError(
+                "INVALID_TAXONOMY_PLAN",
+                "A taxonomy object must explicitly set enabled to true or false.",
+            )
+    taxonomy_enabled = optional_bool(taxonomy_raw, "enabled", False)
+    normalized_taxonomy = {
+        "enabled": taxonomy_enabled,
+        "source": optional_string(taxonomy_raw, "source", "ncbi-taxdump"),
+        "match_mode": optional_string(
+            taxonomy_raw, "match_mode", "exact-scientific-name"
+        ),
+        "names_dmp": optional_string(taxonomy_raw, "names_dmp"),
+        "nodes_dmp": optional_string(taxonomy_raw, "nodes_dmp"),
+        "snapshot": optional_string(taxonomy_raw, "snapshot"),
+        "source_url": optional_string(taxonomy_raw, "source_url"),
+        "retrieved_at": optional_string(taxonomy_raw, "retrieved_at"),
+    }
+    if taxonomy_enabled:
+        if normalized_taxonomy["source"] != "ncbi-taxdump":
+            raise WorkflowError(
+                "INVALID_TAXONOMY_PLAN", "taxonomy.source must be 'ncbi-taxdump'."
+            )
+        if normalized_taxonomy["match_mode"] != "exact-scientific-name":
+            raise WorkflowError(
+                "INVALID_TAXONOMY_PLAN",
+                "taxonomy.match_mode must be 'exact-scientific-name'; fuzzy and alias matching "
+                "cannot assign TaxIDs automatically.",
+            )
+        missing_taxonomy = [
+            key
+            for key in ("names_dmp", "nodes_dmp", "snapshot", "source_url", "retrieved_at")
+            if not normalized_taxonomy[key]
+        ]
+        if missing_taxonomy:
+            raise WorkflowError(
+                "INVALID_TAXONOMY_PLAN",
+                "Enabled taxonomy validation requires: " + ", ".join(missing_taxonomy),
+            )
+        if not normalized_taxonomy["source_url"].startswith(
+            "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/"
+        ):
+            raise WorkflowError(
+                "INVALID_TAXONOMY_PLAN",
+                "taxonomy.source_url must identify an official NCBI Taxonomy FTP archive.",
+            )
+
     itol_raw = optional_mapping(request, "itol")
     colors_raw = optional_mapping(itol_raw, "colors")
     colors = {
@@ -947,6 +1036,7 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
         "alignment": normalized_alignment,
         "trimming": normalized_trimming,
         "tree": normalized_tree,
+        "taxonomy": normalized_taxonomy,
         "itol": normalized_itol,
         "literature": normalized_literature,
     }
@@ -1195,8 +1285,40 @@ def select_candidates(
     return selected, rejected, blockers
 
 
+def taxonomy_audit_policy(
+    config: Mapping[str, Any], resolution: TaxonomyResolution | None
+) -> Dict[str, Any]:
+    taxonomy = config["taxonomy"]
+    if not taxonomy["enabled"]:
+        return {
+            "enabled": False,
+            "status": "not-requested",
+            "source": "ncbi-taxdump",
+            "match_mode": "exact-scientific-name",
+        }
+    if resolution is None:
+        raise WorkflowError("TAXONOMY_VALIDATION_MISSING", "Enabled taxonomy validation has no evidence.")
+    return {
+        "enabled": True,
+        "status": "validated",
+        "source": taxonomy["source"],
+        "match_mode": taxonomy["match_mode"],
+        "snapshot": resolution.snapshot,
+        "source_url": resolution.source_url,
+        "retrieved_at": resolution.retrieved_at,
+        "names_sha256": resolution.names_sha256,
+        "nodes_sha256": resolution.nodes_sha256,
+        "records_validated": len(resolution.rows),
+        "resolver_version": resolution.resolver_version,
+        "resolution_artifact": "taxonomy_resolution.tsv",
+    }
+
+
 def build_fingerprint(
-    config: Mapping[str, Any], query_sequence: str, candidates: Sequence[Candidate]
+    config: Mapping[str, Any],
+    query_sequence: str,
+    candidates: Sequence[Candidate],
+    taxonomy_resolution: TaxonomyResolution | None,
 ) -> Dict[str, Any]:
     return {
         "schema_version": config["schema_version"],
@@ -1218,6 +1340,7 @@ def build_fingerprint(
         "alignment": config["alignment"],
         "trimming": config["trimming"],
         "tree": config["tree"],
+        "taxonomy": taxonomy_audit_policy(config, taxonomy_resolution),
         "itol": config["itol"],
         "literature": config["literature"],
         "candidates": [
@@ -1351,6 +1474,7 @@ def build_plan(
     rejected: Sequence[Tuple[Candidate, Sequence[str]]],
     blockers: Sequence[str],
     input_hashes: Mapping[str, Mapping[str, str]],
+    taxonomy_resolution: TaxonomyResolution | None,
 ) -> Dict[str, Any]:
     all_candidates = list(selected) + [candidate for candidate, _reason_codes in rejected]
     clustering_plan, clustering_blockers = clustering_evaluation(all_candidates, config)
@@ -1464,6 +1588,7 @@ def build_plan(
             "live_lookup_performed_by_planner": False,
         },
         "taxon_scope": config["taxon_scope"],
+        "taxonomy_plan": taxonomy_audit_policy(config, taxonomy_resolution),
         "privacy": config["privacy"],
         "selection_parameters": config["selection"],
         "reference_discovery": {
@@ -1490,6 +1615,14 @@ def build_plan(
         },
         "annotation_plan": {
             "itol_colorstrip": "itol_roles.txt" if config["itol"]["enabled"] else None,
+            "local_ggtree_renderer": {
+                "script": "scripts/render_tree_ggtree.R",
+                "engine": "ggtree+ggplot2",
+                "status": "post-tree-local",
+                "joins": "exact tip_id equality",
+                "default_outputs": ["SVG", "PDF", "settings TSV"],
+                "reroots_tree": False,
+            },
             "colors": config["itol"]["colors"],
             "range_dataset": (
                 "post-tree-only after contiguity/monophyly review"
@@ -1550,7 +1683,12 @@ def build_plan(
             {
                 "id": "reference-and-outgroup",
                 "status": "blocked" if all_blockers else "pending",
-                "requires": ["selected references", "paralog policy", "outgroup rationale"],
+                "requires": [
+                    "selected references",
+                    "paralog policy",
+                    "outgroup rationale",
+                    "taxonomy evidence when enabled",
+                ],
             },
             {
                 "id": "alignment-and-trimming-qc",
@@ -1702,6 +1840,9 @@ def write_bundle(
     rejected: Sequence[Tuple[Candidate, Sequence[str]]],
     blockers: Sequence[str],
     run_id: str,
+    taxonomy_resolution: TaxonomyResolution | None = None,
+    taxonomy_names_path: Path | None = None,
+    taxonomy_nodes_path: Path | None = None,
 ) -> None:
     if output_path.exists():
         raise WorkflowError("OUTPUT_EXISTS", f"Refusing to overwrite existing output path: {output_path}")
@@ -1762,6 +1903,8 @@ def write_bundle(
             (temp_path / "itol_roles.txt").write_text(
                 itol_colorstrip_text(selected, config), encoding="utf-8"
             )
+        if taxonomy_resolution is not None:
+            write_resolution_tsv(temp_path / "taxonomy_resolution.tsv", taxonomy_resolution)
         input_hashes = {
             "request": {
                 "logical_path": f"inputs/{request_path.name}",
@@ -1780,6 +1923,20 @@ def write_bundle(
                 "sha256": file_sha256(candidate_table_path),
             },
         }
+        if taxonomy_resolution is not None:
+            if taxonomy_names_path is None or taxonomy_nodes_path is None:
+                raise WorkflowError(
+                    "TAXONOMY_VALIDATION_MISSING",
+                    "Taxonomy evidence is missing its names.dmp or nodes.dmp input path.",
+                )
+            input_hashes["taxonomy_names"] = {
+                "logical_path": "inputs/names.dmp",
+                "sha256": taxonomy_resolution.names_sha256,
+            }
+            input_hashes["taxonomy_nodes"] = {
+                "logical_path": "inputs/nodes.dmp",
+                "sha256": taxonomy_resolution.nodes_sha256,
+            }
         plan = build_plan(
             run_id,
             config,
@@ -1788,6 +1945,7 @@ def write_bundle(
             rejected,
             blockers,
             input_hashes,
+            taxonomy_resolution,
         )
         if plan["clustering_plan"]["command"]["status"] == "planned":
             expanded = [
@@ -1810,6 +1968,8 @@ def write_bundle(
         )
         if config["itol"]["enabled"]:
             output_names += ("itol_roles.txt",)
+        if taxonomy_resolution is not None:
+            output_names += ("taxonomy_resolution.tsv",)
         if (temp_path / "expanded_candidates.faa").is_file():
             output_names += ("expanded_candidates.faa",)
         media_types = {
@@ -1818,6 +1978,7 @@ def write_bundle(
             "reference_set.faa": "text/x-fasta",
             "sequence_metadata.tsv": "text/tab-separated-values",
             "itol_roles.txt": "text/plain",
+            "taxonomy_resolution.tsv": "text/tab-separated-values",
             "expanded_candidates.faa": "text/x-fasta",
             "plan.json": "application/json",
         }
@@ -1832,6 +1993,39 @@ def write_bundle(
                 }
             )
         ]
+        if taxonomy_resolution is not None:
+            database_provenance.append(
+                {
+                    "source_db": "NCBI Taxonomy new_taxdump",
+                    "source_release": taxonomy_resolution.snapshot,
+                    "retrieved_at": taxonomy_resolution.retrieved_at,
+                    "source_url": taxonomy_resolution.source_url,
+                    "names_sha256": taxonomy_resolution.names_sha256,
+                    "nodes_sha256": taxonomy_resolution.nodes_sha256,
+                    "resolver_version": taxonomy_resolution.resolver_version,
+                }
+            )
+        manifest_inputs = [
+            logical_input("request", request_path.name, request_digest),
+            logical_input("query_fasta", query_path.name, input_hashes["query_fasta"]["sha256"]),
+            logical_input(
+                "candidate_fasta",
+                candidate_fasta_path.name,
+                input_hashes["candidate_fasta"]["sha256"],
+            ),
+            logical_input(
+                "candidate_table",
+                candidate_table_path.name,
+                input_hashes["candidate_table"]["sha256"],
+            ),
+        ]
+        if taxonomy_resolution is not None:
+            manifest_inputs.extend(
+                [
+                    logical_input("taxonomy_names", "names.dmp", taxonomy_resolution.names_sha256),
+                    logical_input("taxonomy_nodes", "nodes.dmp", taxonomy_resolution.nodes_sha256),
+                ]
+            )
         manifest: Dict[str, Any] = {
             "schema_version": OUTPUT_SCHEMA_VERSION,
             "workflow_version": VERSION,
@@ -1845,23 +2039,11 @@ def write_bundle(
                 "logical_path": f"inputs/{request_path.name}",
                 "sha256": request_digest,
             },
-            "input_artifacts": [
-                logical_input("request", request_path.name, request_digest),
-                logical_input("query_fasta", query_path.name, input_hashes["query_fasta"]["sha256"]),
-                logical_input(
-                    "candidate_fasta",
-                    candidate_fasta_path.name,
-                    input_hashes["candidate_fasta"]["sha256"],
-                ),
-                logical_input(
-                    "candidate_table",
-                    candidate_table_path.name,
-                    input_hashes["candidate_table"]["sha256"],
-                ),
-            ],
+            "input_artifacts": manifest_inputs,
             "query": {
                 "id": config["query"]["id"],
                 "organism": config["query"]["organism"],
+                "taxon_id": config["query"]["taxon_id"],
                 "length": len(query_sequence),
                 "sequence_sha256": sha256_text(query_sequence),
             },
@@ -1876,6 +2058,7 @@ def write_bundle(
                 "alignment": config["alignment"],
                 "trimming": config["trimming"],
                 "tree": config["tree"],
+                "taxonomy": taxonomy_audit_policy(config, taxonomy_resolution),
                 "itol": config["itol"],
                 "literature": config["literature"],
             },
@@ -1895,6 +2078,7 @@ def write_bundle(
                 "trimal": {"status": "not-inspected", "version": None},
                 "fasttree": {"status": "not-inspected", "version": None},
                 "iqtree2": {"status": "not-inspected", "version": None},
+                "rscript": {"status": "not-inspected", "version": None},
             },
             "commands": plan["planned_commands"],
             "execution": {"network_calls": 0, "external_processes": 0},
@@ -1956,10 +2140,75 @@ def run_plan(args: argparse.Namespace) -> int:
     candidate_records = parse_fasta(candidate_fasta_path, "candidate")
     candidate_sequences = {identifier: sequence for identifier, _header, sequence in candidate_records}
     candidates = parse_candidate_table(candidate_table_path, candidate_sequences)
+    taxonomy_resolution: TaxonomyResolution | None = None
+    taxonomy_names_path: Path | None = None
+    taxonomy_nodes_path: Path | None = None
+    if config["taxonomy"]["enabled"]:
+        taxonomy_names_path = resolve_input_path(
+            request_path, config["taxonomy"]["names_dmp"], "NCBI names.dmp"
+        )
+        taxonomy_nodes_path = resolve_input_path(
+            request_path, config["taxonomy"]["nodes_dmp"], "NCBI nodes.dmp"
+        )
+        query_self = [
+            candidate
+            for candidate in candidates
+            if candidate.accession == config["query"]["id"] or candidate.relation == "self"
+        ]
+        if len(query_self) != 1:
+            raise WorkflowError(
+                "QUERY_CANDIDATE_COUNT",
+                "Candidate bundle must contain exactly one self record matching the query ID.",
+            )
+        if (
+            query_self[0].accession != config["query"]["id"]
+            or query_self[0].relation != "self"
+        ):
+            raise WorkflowError(
+                "INVALID_QUERY_CANDIDATE",
+                "The query candidate must use the query accession and relation='self'.",
+            )
+        if query_self[0].species != config["query"]["organism"]:
+            raise WorkflowError(
+                "QUERY_TAXONOMY_MISMATCH",
+                "query.organism must exactly equal the query self-record species before "
+                "NCBI Taxonomy validation.",
+            )
+        if config["query"]["taxon_id"] and query_self[0].taxon_id != config["query"]["taxon_id"]:
+            raise WorkflowError(
+                "QUERY_TAXONOMY_MISMATCH",
+                "query.taxon_id must equal the query self-record TaxID before NCBI Taxonomy "
+                "validation.",
+            )
+        try:
+            taxonomy_resolution = resolve_exact_scientific_names(
+                [
+                    NameRequest(candidate.accession, candidate.species, candidate.taxon_id)
+                    for candidate in candidates
+                ],
+                names_path=taxonomy_names_path,
+                nodes_path=taxonomy_nodes_path,
+                snapshot=config["taxonomy"]["snapshot"],
+                source_url=config["taxonomy"]["source_url"],
+                retrieved_at=config["taxonomy"]["retrieved_at"],
+            )
+        except TaxonomyError as exc:
+            detail = (
+                " Details: " + json.dumps(exc.details, ensure_ascii=False, sort_keys=True)
+                if exc.details
+                else ""
+            )
+            raise WorkflowError(exc.code, exc.message + detail) from exc
+        query_resolution_row = next(
+            row
+            for row in taxonomy_resolution.rows
+            if row["record_id"] == config["query"]["id"]
+        )
+        config["query"]["taxon_id"] = query_resolution_row["taxon_id"]
     selected, rejected, blockers = select_candidates(candidates, query_id, query_sequence, config)
     _clustering_plan, clustering_blockers = clustering_evaluation(candidates, config)
     all_blockers = list(dict.fromkeys([*blockers, *clustering_blockers]))
-    fingerprint = build_fingerprint(config, query_sequence, candidates)
+    fingerprint = build_fingerprint(config, query_sequence, candidates, taxonomy_resolution)
     run_id = "gtr-" + sha256_text(canonical_json(fingerprint))[:16]
     write_bundle(
         output_path,
@@ -1973,6 +2222,9 @@ def run_plan(args: argparse.Namespace) -> int:
         rejected,
         all_blockers,
         run_id,
+        taxonomy_resolution,
+        taxonomy_names_path,
+        taxonomy_nodes_path,
     )
 
     status = (
@@ -2001,6 +2253,7 @@ def run_doctor(args: argparse.Namespace) -> int:
         "trimal": ["trimal", "--version"],
         "fasttree": ["FastTree", "-help"],
         "iqtree2": ["iqtree2", "--version"],
+        "rscript": ["Rscript", "--version"],
     }
     results: Dict[str, Dict[str, Any]] = {}
     for name, argv in probes.items():
