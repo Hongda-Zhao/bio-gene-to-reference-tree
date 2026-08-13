@@ -24,6 +24,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -454,7 +455,10 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     with tempfile.TemporaryDirectory(prefix="taxonomy-lineage-") as temporary:
         database = Path(temporary) / "nodes.sqlite3"
-        with sqlite3.connect(database) as connection:
+        # A sqlite3 connection context manager commits or rolls back, but it
+        # does not close the connection.  Close it explicitly so Windows can
+        # delete the temporary database when TemporaryDirectory exits.
+        with closing(sqlite3.connect(database)) as connection:
             nodes_sha256 = load_nodes(args.nodes_dmp, connection)
             expected_nodes_sha256 = resolutions[0].nodes_sha256
             if nodes_sha256 != expected_nodes_sha256:
