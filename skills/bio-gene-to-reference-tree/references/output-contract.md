@@ -25,13 +25,14 @@ The helper never performs the live resolution itself.
 
 ## Deterministic planning artifacts
 
-A successful schema 0.2 plan produces:
+A successful plan from a schema 0.2 request emits plan schema 0.3 and produces:
 
 ```text
 selected_references.tsv
 rejected_references.tsv
 reference_set.faa
 sequence_metadata.tsv
+taxonomy_resolution.tsv     # when local NCBI taxdump validation is enabled
 itol_roles.txt              # when iTOL annotation is enabled
 plan.json
 manifest.json
@@ -40,6 +41,8 @@ manifest.json
 When automatic clustering is triggered but no cluster mapping is supplied, also produce `expanded_candidates.faa`, set state `pending-clustering`, and require re-planning after MMseqs2.
 
 Do not write an empty `literature_evidence.tsv`; create it only after a real evidence search.
+
+When taxonomy validation is enabled, treat `names.dmp` and `nodes.dmp` as hashed inputs from one recorded NCBI snapshot. The emitted `taxonomy_resolution.tsv` must contain one row per candidate and retain record ID, raw input name, requested TaxID, matched scientific name, resolved TaxID, parent TaxID, rank, snapshot provenance, and both dump hashes. Do not emit a partial successful table after any unresolved, ambiguous, alias-only, missing-node, or TaxID-mismatch result.
 
 ### `selected_references.tsv`
 
@@ -75,7 +78,7 @@ Make this the reviewable, decision-bearing artifact. Include:
 ```text
 schema_version, request_schema_version, project_id, run_id, state,
 objective, sequence_context, query, query_resolution,
-taxon_scope, privacy, reference_discovery, selection_parameters,
+taxon_scope, taxonomy_plan, privacy, reference_discovery, selection_parameters,
 clustering_plan, alignment_plan, trimming_plan, tree_plan,
 annotation_plan, literature_plan, selection_summary,
 selected_accessions, rejected_accessions_and_reasons,
@@ -87,7 +90,7 @@ Use `pending-clustering`, `blocked`, or `pending-reference-approval`. Keep `appr
 
 Store each command as an argv array with stable ID, stage, tool, logical inputs/outputs, status, and `executed: false`. Never store a shell string. Label support semantics explicitly for FastTree, UFBoot2, standard bootstrap, and SH-aLRT.
 
-Compute `plan_hash` over canonical decision-bearing content and semantic candidate/sequence hashes. Exclude volatile presentation time, approval, and raw byte-order hashes. A changed sequence, metadata value, threshold, cluster, outgroup, trim profile, model, support method, seed, command, or iTOL color must change it. Reordering semantically identical candidates must not.
+Compute `plan_hash` over canonical decision-bearing content and semantic candidate/sequence hashes. Exclude volatile presentation time, approval, and raw byte-order hashes. A changed sequence, metadata value, taxonomy snapshot or dump hash, threshold, cluster, outgroup, trim profile, model, support method, seed, command, or iTOL color must change it. Reordering semantically identical candidates must not.
 
 ### `manifest.json`
 
@@ -102,6 +105,8 @@ tool_versions, commands, execution, warnings, errors
 ```
 
 For each artifact, record logical relative path, media type, byte size, and SHA-256. Do not store the manifest's own digest inside itself. Mark unavailable tool versions `not-inspected`; never guess. Record zero network calls and external processes in plan mode.
+
+When taxonomy validation is enabled, include logical `taxonomy_names` and `taxonomy_nodes` inputs, their SHA-256 values, exact archive URL, snapshot label, retrieval time, match mode, and `taxonomy_resolution.tsv` output. When it is disabled, record `taxonomy_plan.status = not-requested`; do not imply that unvalidated names were checked.
 
 Never write credentials, headers, cookies, unpublished sequence content, home-directory paths, or absolute host paths into manifests or planned commands.
 
@@ -129,6 +134,11 @@ annotation/
   itol_roles.txt
   itol_ranges.txt              # only after topology review
   sequence_metadata.tsv
+  taxonomy_resolution.tsv      # when local taxdump validation ran
+figures/
+  gene-tree.<root-state>.ggtree.svg
+  gene-tree.<root-state>.ggtree.pdf
+  gene-tree.<root-state>.ggtree.settings.tsv
 evidence/
   literature_evidence.tsv
   references.bib
@@ -138,7 +148,7 @@ report/
   checksums.sha256
 ```
 
-Link every executed artifact to exact input hashes, the approved reference plan hash, the approved MSA hash, and exact tool versions.
+Link every executed artifact to exact input hashes, the approved reference plan hash, the approved MSA hash, and exact tool versions. For a local ggtree/ggplot2 figure, additionally record the Newick hash, metadata hash, optional iTOL-role hash, declared root state, branch-length mode, support format, layout, canvas dimensions, palette source, R version, and package versions. The renderer must refuse missing/extra/duplicate tip IDs and must not install packages or contact the network.
 
 ## Literature evidence schema
 
@@ -154,6 +164,8 @@ conflicts, limitations, source_url, retrieved_at
 ## Failure semantics
 
 - Exit non-zero on malformed JSON/TSV/FASTA, missing sequence matches, duplicate IDs, invalid values, unresolved query handoff, insufficient taxa/sequences, missing required outgroup/rationale, pending required clustering, or an existing output directory.
+- Exit non-zero before selection when enabled NCBI taxonomy validation finds no unique character-for-character `scientific name` match, an alias-only match, ambiguity, a missing node, malformed dump evidence, a non-NCBI archive URL, or a TaxID mismatch. The host-side archive verifier, not the two-file resolver, must reject mixed snapshots and checksum failures before invocation.
+- Exit non-zero before figure output when tree tips and selected metadata IDs differ, packages are unavailable, support semantics are invalid or undeclared, or any SVG/PDF/settings target already exists.
 - For biological blockers discovered after valid selection, emit a blocked audit bundle and return status 3.
 - Emit validation diagnostics to stderr and keep structured stdout machine-readable.
 - Never convert failed validation into an empty successful plan.

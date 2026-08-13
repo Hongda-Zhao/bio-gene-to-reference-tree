@@ -61,6 +61,8 @@ retrieval_query_id, notes
 
 Use real tabs. Represent unavailable optional values as empty. Never invent confidence, taxonomy, release, retrieval metadata, or an outgroup rationale.
 
+When local NCBI taxdump validation is enabled, every `species` value must be the intended character-for-character NCBI `scientific name`, and every `taxon_id` must agree with its single exact match in the supplied snapshot. Do not rewrite candidate rows from a case-insensitive, fuzzy, substring, synonym, common-name, or first-result match. Preserve the independent resolution evidence in `taxonomy_resolution.tsv`; stop before selection if any name is unresolved, ambiguous, missing from `nodes.dmp`, or inconsistent with its supplied TaxID. This check does not derive or validate the free-text `lineage` or `clade` columns; curate those separately and do not label them dump-validated.
+
 Keep `role=ingroup|outgroup` as the biological scope. Derive the iTOL/display `analysis_group` as:
 
 - query/self record → `study`;
@@ -126,7 +128,7 @@ Cluster `expanded_candidates.faa`, never the mixed study/outgroup set. Preserve 
 
 ## Taxonomic balance
 
-Sample the declared ingroup rather than allowing database-rich species or one dense clade to dominate. Apply TaxID quotas, report unsampled major clades, and record every cap. For one-to-one orthologs, one record per species is reasonable only after the relationship is established. For duplication-rich families, retain multiple copies and label them explicitly.
+Sample the declared ingroup rather than allowing database-rich species or one dense clade to dominate. Apply validated TaxID quotas, report unsampled major clades, and record every cap. For one-to-one orthologs, one record per species is reasonable only after the relationship is established. For duplication-rich families, retain multiple copies and label them explicitly. Treat NCBI parent/rank data as classification evidence for sampling, not as a statistically inferred species tree.
 
 Do not manufacture breadth using extremely weak or fragmentary hits. Stop when the requested scope cannot be represented credibly.
 

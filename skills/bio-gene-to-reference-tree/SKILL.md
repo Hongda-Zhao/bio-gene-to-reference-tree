@@ -1,6 +1,6 @@
 ---
 name: bio-gene-to-reference-tree
-description: Build an auditable protein gene tree from an accession, raw amino-acid sequence, or protein or gene name plus source organism. Use when an agent must resolve query metadata, discover and curate ortholog or homolog references and an outgroup, cluster redundant candidates, align and trim proteins, run FastTree or IQ-TREE2, generate iTOL annotations and metadata tables, or compare a gene tree with current phylogenetic literature. Require review gates before reference selection and tree inference.
+description: Build an auditable protein gene tree from an accession, raw amino-acid sequence, or protein or gene name plus source organism. Use when an agent must resolve query metadata and exact NCBI TaxIDs from local taxdump files, curate ortholog or homolog references and an outgroup, cluster redundant candidates, align and trim proteins, run FastTree or IQ-TREE2, generate iTOL or ggtree/ggplot2 figures and metadata, or compare a gene tree with current phylogenetic literature. Require review gates before reference selection and tree inference.
 ---
 
 # Gene to Reference Tree
@@ -28,6 +28,8 @@ Classify the input as:
 - a protein or gene name plus source organism or TaxID.
 
 Resolve an accession against its authoritative namespace and record status, version, sequence, organism, TaxID, lineage, gene/protein names, source release, retrieval time, and sequence SHA-256. For a name, require an organism or TaxID and use literature only to disambiguate identity and context; retrieve the sequence from an authoritative database record. For a raw sequence, validate the alphabet, length, low complexity, and likely molecule type before searching.
+
+When deriving or validating a TaxID from an organism name, prefer a verified, single-snapshot NCBI `new_taxdump`. Require character-for-character equality to a unique `names.dmp` `scientific name`, then verify the TaxID in the same snapshot's `nodes.dmp`. Do not case-fold, trim, accept an alias, or select the first ambiguous match. Read [taxonomy-resolution.md](references/taxonomy-resolution.md) before assigning TaxIDs from names.
 
 Before any live lookup, including a public accession or symbol lookup, record whether remote queries are allowed. If they are not, stop and request a local resolved FASTA/metadata handoff. Obtain separate explicit permission before uploading an unpublished sequence.
 
@@ -99,7 +101,7 @@ Retain each profile, report columns removed and retained fraction, verify conser
 
 Retain the unrooted tree. Produce a separate rooted copy only from an approved outgroup. Never interpret high support as immunity to alignment error, model misspecification, or long-branch attraction.
 
-### 9. Generate iTOL and metadata outputs
+### 9. Generate iTOL, ggtree, and metadata outputs
 
 Generate an official `DATASET_COLORSTRIP` file by default:
 
@@ -108,6 +110,8 @@ Generate an official `DATASET_COLORSTRIP` file by default:
 - `outgroup`: gray `#999999`.
 
 Generate `DATASET_RANGE` only after the final topology shows that a requested group is a meaningful contiguous clade; do not use a range to imply monophyly. Keep full evolutionary metadata in TSV rather than overloading tree labels. Read [itol-and-literature.md](references/itol-and-literature.md) before generating iTOL/metadata outputs or beginning the literature comparison.
+
+For a reproducible local figure, use `scripts/render_tree_ggtree.R` with `ggtree + ggplot2`. Require exact equality among Newick tips, selected `sequence_metadata.tsv` tip IDs, and optional iTOL DATA tips. Declare root state, branch-length semantics, and support type; never reroot, ladderize, or infer a support scale during rendering. Prefer SVG/PDF and preserve the settings TSV. Read [ggtree-visualization.md](references/ggtree-visualization.md) before rendering.
 
 ### 10. Compare with current phylogenetic evidence
 
@@ -136,18 +140,22 @@ python3 <skill-root>/scripts/gene_to_tree.py doctor --json
 
 ## Keep capability claims honest
 
-Use host-provided, authorized database, literature, browser, and shell capabilities for live acquisition and execution. The bundled helper validates a materialized local bundle and compiles deterministic plans and annotations; it does not itself query NCBI, UniProt, Ensembl, OMA, OrthoDB, literature indexes, Open Tree, ICTV, or iTOL, and it does not run MMseqs2, MAFFT, trimAl, FastTree, or IQ-TREE2 during `plan`.
+Use host-provided, authorized database, literature, browser, and shell capabilities for live acquisition and execution. The bundled helper validates a materialized local bundle, optionally validates organism/TaxID pairs against supplied local NCBI dump files, and compiles deterministic plans and annotations. It does not download taxdump files or query NCBI, UniProt, Ensembl, OMA, OrthoDB, literature indexes, Open Tree, ICTV, or iTOL, and it does not run MMseqs2, MAFFT, trimAl, FastTree, IQ-TREE2, or R during `plan`.
 
 Do not fabricate a lookup result, sequence, TaxID, orthology call, citation, tool version, or database release when a capability is unavailable.
 
 ## Bundled resources
 
 - [query-resolution.md](references/query-resolution.md): accession, name, raw-sequence, CDS, fallback, privacy, and viral routing.
+- [taxonomy-resolution.md](references/taxonomy-resolution.md): official NCBI taxdump snapshots, strict scientific-name matching, TaxID status, and provenance.
 - [tool-routing.md](references/tool-routing.md): authoritative databases, search tiers, and executable boundaries.
 - [reference-selection.md](references/reference-selection.md): selection, clustering, taxonomic balance, outgroups, and reason codes.
 - [alignment-and-tree.md](references/alignment-and-tree.md): MAFFT, trimAl, FastTree, IQ-TREE2, QC, and support semantics.
 - [itol-and-literature.md](references/itol-and-literature.md): iTOL files, metadata, evidence search, and gene-tree/species-tree comparison.
+- [ggtree-visualization.md](references/ggtree-visualization.md): local ggtree/ggplot2 rendering, exact tip joins, support semantics, and vector exports.
 - [workflow.md](references/workflow.md): states, gates, failure conditions, and viral branch.
 - [output-contract.md](references/output-contract.md): request, artifact, plan, manifest, and final-report contracts.
-- `references/request-0.2.schema.json` and `references/plan-0.2.schema.json`: portable JSON schemas.
+- `references/request-0.2.schema.json`, `references/plan-0.2.schema.json`, and `references/plan-0.3.schema.json`: portable request and versioned plan schemas.
 - `scripts/gene_to_tree.py`: standard-library offline review-bundle compiler and tool doctor.
+- `scripts/ncbi_taxonomy.py`: strict, standard-library resolver for local `names.dmp` and `nodes.dmp` files.
+- `scripts/render_tree_ggtree.R`: local publication-figure renderer using ggtree and ggplot2.

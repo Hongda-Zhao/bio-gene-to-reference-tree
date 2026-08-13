@@ -149,6 +149,48 @@
         }
       }
     },
+    "taxonomy": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "source": {"const": "ncbi-taxdump"},
+        "match_mode": {"const": "exact-scientific-name"},
+        "names_dmp": {"type": "string", "minLength": 1},
+        "nodes_dmp": {"type": "string", "minLength": 1},
+        "snapshot": {"type": "string", "minLength": 1},
+        "source_url": {
+          "type": "string",
+          "pattern": "^https://ftp\\.ncbi\\.nlm\\.nih\\.gov/pub/taxonomy/(?:new_taxdump/new_taxdump\\.(?:tar\\.gz|zip)|taxdump_archive/new_taxdump_[0-9]{4}-[0-9]{2}-[0-9]{2}\\.zip)$"
+        },
+        "retrieved_at": {
+          "type": "string",
+          "oneOf": [
+            {"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+            {
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|\\+00:00)$"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]},
+          "then": {
+            "required": [
+              "source",
+              "match_mode",
+              "names_dmp",
+              "nodes_dmp",
+              "snapshot",
+              "source_url",
+              "retrieved_at"
+            ]
+          }
+        }
+      ]
+    },
     "itol": {
       "type": "object",
       "properties": {

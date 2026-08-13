@@ -25,6 +25,8 @@ Any state may enter `blocked` or `failed`. Invalidate prior approval when a quer
 
 Require a local resolved protein record with a stable ID, sequence, organism, and provenance. For accession/name routes, retain the original input and resolution evidence. Stop on ambiguity, unresolved isoforms, non-protein input, invalid CDS translation, or missing organism/TaxID for a name.
 
+When NCBI taxdump validation is enabled, validate every candidate `species`/`taxon_id` pair against already-extracted `names.dmp` and `nodes.dmp` from the same recorded snapshot before selection. Accept only a unique character-for-character `scientific name` match and an exact TaxID agreement. Stop on aliases, fuzzy or normalized matches, ambiguity, missing nodes, or mixed/unrecorded snapshots. Bind approval to the dump hashes and `taxonomy_resolution.tsv`.
+
 For unpublished material, stop until the user approves each remote submission class. Permission to query one database does not automatically authorize iTOL upload or another external service.
 
 ## Gate 2: reference and outgroup approval
@@ -32,6 +34,7 @@ For unpublished material, stop until the user approves each remote submission cl
 Present:
 
 - acquisition tier and database provenance;
+- exact-name taxonomy evidence and taxdump hashes when enabled;
 - counts before/after every filter and cluster;
 - retained taxa and unsampled clades;
 - study, expanded, and outgroup roles;
@@ -65,6 +68,8 @@ Preserve the unrooted tree and all native logs. Create a rooted derivative only 
 
 Generate the iTOL color strip and metadata locally. Generate a range dataset only after checking contiguity/monophyly. Obtain separate permission before uploading unpublished material to iTOL.
 
+When a local figure is requested, run the bundled ggtree/ggplot2 renderer only on an approved Newick tree and the corresponding metadata. Require exact equality between the tree tip set and selected `tip_id` values, declare root state, branch-length mode, and support format, and preserve SVG, PDF, and renderer settings TSV outputs. The renderer must never install packages, contact the network, reroot, ladderize, or guess support semantics.
+
 Search current phylogenetic evidence, label direct versus broader-taxonomic sources, and compare it with the gene tree without forcing agreement. Record conflicts and plausible causes. For viral analyses, require recombination/reassortment/segment review before completion.
 
 ## Completion contract
@@ -77,14 +82,16 @@ Mark the workflow complete only when the final report includes:
 - unrooted tree and optional separately rooted tree;
 - correctly named support measures and model;
 - iTOL roles and full sequence metadata;
+- optional NCBI taxonomy resolution evidence with snapshot and dump hashes;
+- requested local ggtree SVG/PDF figures and their settings TSV;
 - real literature/taxonomy evidence or an explicit evidence-search limitation;
 - exact commands, versions, hashes, warnings, manual decisions, and approved plan hashes.
 
 ## Bundled helper behavior
 
-The helper compiles only the local pre-execution review bundle. It uses `pending-clustering`, `blocked`, or `pending-reference-approval`; later states belong to host-agent execution and must not be claimed by the planner.
+The planner compiles only the local pre-execution review bundle. It may validate supplied local taxdump files but never downloads them. It uses `pending-clustering`, `blocked`, or `pending-reference-approval`; tree rendering and later states belong to separately invoked local or host-agent execution and must not be claimed by the planner.
 
-The helper accepts request schema 0.1 for migration, emits a deprecation warning, normalizes it to output schema 0.2, and never mutates the source request. Use schema 0.2 for all new work.
+The helper accepts request schema 0.1 for migration, emits a deprecation warning, and never mutates the source request. It emits plan/output schema 0.3; use request schema 0.2 for all new work.
 
 ## Out-of-scope routing
 

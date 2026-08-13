@@ -1,6 +1,16 @@
-# iTOL annotation and literature context
+# iTOL, local visualization, and literature context
 
 Keep tree-tip styling, full sequence metadata, and external phylogenetic evidence as separate reproducible artifacts.
+
+## Contents
+
+- [Analysis roles](#analysis-roles)
+- [Default iTOL file](#default-itol-file)
+- [Local ggtree and ggplot2 figure](#local-ggtree-and-ggplot2-figure)
+- [Sequence metadata table](#sequence-metadata-table)
+- [Literature evidence search](#literature-evidence-search)
+- [Literature evidence table](#literature-evidence-table)
+- [Gene-tree/species-tree comparison](#gene-treespecies-tree-comparison)
 
 ## Analysis roles
 
@@ -39,6 +49,12 @@ Official templates:
 - Color strip: <https://itol.embl.de/help/dataset_color_strip_template.txt>
 - Range: <https://itol.embl.de/help/dataset_ranges_template.txt>
 - Text labels: <https://itol.embl.de/help/dataset_text_template.txt>
+
+## Local ggtree and ggplot2 figure
+
+Use the bundled `render_tree_ggtree.R` after tree inference when a reproducible local or publication-oriented figure is requested. Require exact equality among Newick tips, selected `sequence_metadata.tsv` `tip_id` values, and optional iTOL DATA tips. Preserve the same study orange, expanded green, and outgroup gray roles, but keep accessions as stable tree identifiers and use species names only in display labels.
+
+Prefer SVG and PDF vector output and retain the generated settings TSV. Declare whether the supplied tree is unrooted or separately outgroup-rooted, whether branches represent substitutions per site or topology only, and which support format is shown. The renderer must not reroot, ladderize, guess support semantics, install R packages, or contact the network. See [ggtree-visualization.md](ggtree-visualization.md) for the complete local rendering contract.
 
 ## Sequence metadata table
 

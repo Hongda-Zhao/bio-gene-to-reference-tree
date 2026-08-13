@@ -79,6 +79,8 @@ class SkillPackageTests(unittest.TestCase):
     def test_declared_resources_exist(self) -> None:
         expected = {
             "scripts/gene_to_tree.py",
+            "scripts/ncbi_taxonomy.py",
+            "scripts/render_tree_ggtree.R",
             "assets/request.example.json",
             "assets/query.example.faa",
             "assets/candidates.example.faa",
@@ -88,10 +90,13 @@ class SkillPackageTests(unittest.TestCase):
             "references/output-contract.md",
             "references/tool-routing.md",
             "references/query-resolution.md",
+            "references/taxonomy-resolution.md",
             "references/alignment-and-tree.md",
             "references/itol-and-literature.md",
+            "references/ggtree-visualization.md",
             "references/request-0.2.schema.json",
             "references/plan-0.2.schema.json",
+            "references/plan-0.3.schema.json",
             "agents/openai.yaml",
             "LICENSE",
         }
@@ -104,15 +109,24 @@ class SkillPackageTests(unittest.TestCase):
         self.assertRegex(content, r'short_description: "[^"\n]{25,64}"')
         self.assertIn("$bio-gene-to-reference-tree", content)
 
-    def test_v02_version_and_schema_surfaces_are_synchronized(self) -> None:
+    def test_v03_workflow_and_v02_schema_surfaces_are_synchronized(self) -> None:
         script = (SKILL_ROOT / "scripts" / "gene_to_tree.py").read_text(encoding="utf-8")
         request = json.loads((SKILL_ROOT / "assets" / "request.example.json").read_text(encoding="utf-8"))
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
 
-        self.assertIn('VERSION = "0.2.0"', script)
-        self.assertIn('OUTPUT_SCHEMA_VERSION = "0.2"', script)
+        self.assertIn('VERSION = "0.3.0"', script)
+        self.assertIn('OUTPUT_SCHEMA_VERSION = "0.3"', script)
         self.assertEqual(request["schema_version"], "0.2")
-        self.assertIn("v0.2 review candidate", readme)
+        self.assertIn("v0.3 review candidate", readme)
+
+        request_schema = json.loads(
+            (SKILL_ROOT / "references" / "request-0.2.schema.json").read_text(encoding="utf-8")
+        )
+        plan_schema = json.loads(
+            (SKILL_ROOT / "references" / "plan-0.3.schema.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("taxonomy", request_schema["properties"])
+        self.assertIn("taxonomy_plan", plan_schema["required"])
 
     def test_public_discovery_surfaces_are_documented(self) -> None:
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")

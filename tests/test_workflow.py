@@ -29,6 +29,7 @@ SCRIPT = (
 )
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "review"
 ASSETS = REPOSITORY_ROOT / "skills" / "bio-gene-to-reference-tree" / "assets"
+TAXONOMY_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "taxonomy"
 SECRET_SENTINEL = "offline-test-secret-must-not-appear"
 
 
@@ -179,6 +180,27 @@ class OfflineWorkflowContractTests(unittest.TestCase):
         request_path = self.temp_root / name
         request_path.write_text(json.dumps(request), encoding="utf-8")
         return request_path
+
+    def _enable_taxonomy(
+        self,
+        request: dict[str, Any],
+        *,
+        names: Path | None = None,
+        nodes: Path | None = None,
+    ) -> None:
+        request["taxonomy"] = {
+            "enabled": True,
+            "source": "ncbi-taxdump",
+            "match_mode": "exact-scientific-name",
+            "names_dmp": str(names or TAXONOMY_FIXTURES / "names.dmp"),
+            "nodes_dmp": str(nodes or TAXONOMY_FIXTURES / "nodes.dmp"),
+            "snapshot": "synthetic-2026-08-01",
+            "source_url": (
+                "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/"
+                "taxdump_archive/new_taxdump_2026-08-01.zip"
+            ),
+            "retrieved_at": "2026-08-13T00:00:00Z",
+        }
 
     def test_review_fixture_selects_and_rejects_auditable_candidates(self) -> None:
         output = self._successful_plan()
@@ -372,7 +394,8 @@ class OfflineWorkflowContractTests(unittest.TestCase):
         output = self._successful_plan(request_path, out=self.temp_root / "v02")
 
         plan = json.loads((output / "plan.json").read_text(encoding="utf-8"))
-        self.assertEqual(plan["schema_version"], "0.2")
+        self.assertEqual(plan["schema_version"], "0.3")
+        self.assertEqual(plan["request_schema_version"], "0.2")
         self.assertEqual(plan["state"], "pending-reference-approval")
         self.assertEqual(
             [gate["id"] for gate in plan["decision_gates"]],
@@ -400,6 +423,116 @@ class OfflineWorkflowContractTests(unittest.TestCase):
         manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
         recorded_outputs = {item["logical_path"] for item in manifest["output_artifacts"]}
         self.assertEqual(recorded_outputs, {path.name for path in output.iterdir()} - {"manifest.json"})
+
+    def test_optional_ncbi_taxdump_validation_emits_auditable_evidence(self) -> None:
+        request_path = self._write_v02_request("taxonomy request.json", self._enable_taxonomy)
+        output = self._successful_plan(request_path, out=self.temp_root / "taxonomy")
+
+        resolution = _read_tsv(output / "taxonomy_resolution.tsv")
+        candidates = _read_tsv(ASSETS / "candidates.example.tsv")
+        self.assertEqual(len(resolution), len(candidates))
+        self.assertTrue(all(row["name_class"] == "scientific name" for row in resolution))
+        self.assertTrue(all(row["status"] == "resolved-exact-scientific-name" for row in resolution))
+        self.assertEqual(
+            {(row["input_name"], row["taxon_id"]) for row in resolution},
+            {(row["species"], row["taxon_id"]) for row in candidates},
+        )
+
+        plan = json.loads((output / "plan.json").read_text(encoding="utf-8"))
+        self.assertEqual(plan["taxonomy_plan"]["status"], "validated")
+        self.assertEqual(plan["taxonomy_plan"]["match_mode"], "exact-scientific-name")
+        self.assertEqual(plan["query"]["taxon_id"], "9606")
+        self.assertRegex(plan["taxonomy_plan"]["names_sha256"], r"^[0-9a-f]{64}$")
+        self.assertRegex(plan["taxonomy_plan"]["nodes_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(
+            plan["annotation_plan"]["local_ggtree_renderer"]["engine"], "ggtree+ggplot2"
+        )
+
+        manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+        input_roles = {item["role"] for item in manifest["input_artifacts"]}
+        self.assertTrue({"taxonomy_names", "taxonomy_nodes"}.issubset(input_roles))
+        self.assertEqual(manifest["policy"]["taxonomy"]["status"], "validated")
+        self.assertIn("rscript", manifest["tool_versions"])
+
+    def test_taxdump_derives_missing_query_taxid_from_exact_name(self) -> None:
+        def missing_query_taxid(request: dict[str, Any]) -> None:
+            request["query"].pop("taxon_id", None)
+            self._enable_taxonomy(request)
+
+        request_path = self._write_v02_request(
+            "taxonomy derive query taxid.json", missing_query_taxid
+        )
+        output = self._successful_plan(
+            request_path, out=self.temp_root / "taxonomy-derived-query-taxid"
+        )
+        plan = json.loads((output / "plan.json").read_text(encoding="utf-8"))
+        manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(plan["query"]["taxon_id"], "9606")
+        self.assertEqual(manifest["query"]["taxon_id"], "9606")
+
+    def test_taxdump_snapshot_hash_is_decision_bearing(self) -> None:
+        first_request = self._write_v02_request("taxonomy first.json", self._enable_taxonomy)
+        first = self._successful_plan(first_request, out=self.temp_root / "taxonomy-first")
+
+        changed_names = self.temp_root / "names-with-irrelevant-record.dmp"
+        changed_names.write_bytes(
+            (TAXONOMY_FIXTURES / "names.dmp").read_bytes()
+            + b"999999\t|\tIrrelevant taxon\t|\t\t|\tscientific name\t|\n"
+        )
+
+        def changed_snapshot(request: dict[str, Any]) -> None:
+            self._enable_taxonomy(request, names=changed_names)
+
+        second_request = self._write_v02_request("taxonomy second.json", changed_snapshot)
+        second = self._successful_plan(second_request, out=self.temp_root / "taxonomy-second")
+        first_plan = json.loads((first / "plan.json").read_text(encoding="utf-8"))
+        second_plan = json.loads((second / "plan.json").read_text(encoding="utf-8"))
+        self.assertNotEqual(first_plan["taxonomy_plan"]["names_sha256"], second_plan["taxonomy_plan"]["names_sha256"])
+        self.assertNotEqual(first_plan["plan_hash"], second_plan["plan_hash"])
+        self.assertNotEqual(first_plan["run_id"], second_plan["run_id"])
+
+    def test_taxdump_taxid_mismatch_fails_before_writing_a_bundle(self) -> None:
+        rows = _read_tsv(ASSETS / "candidates.example.tsv")
+        table = self.temp_root / "taxonomy-mismatch.tsv"
+        with table.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(rows[0]), delimiter="\t", lineterminator="\n")
+            writer.writeheader()
+            for row in rows:
+                if row["accession"] == "CHICKEN_OK":
+                    row["taxon_id"] = "9606"
+                writer.writerow(row)
+
+        def mismatch(request: dict[str, Any]) -> None:
+            self._enable_taxonomy(request)
+            request["references"]["candidate_table"] = str(table)
+
+        request_path = self._write_v02_request("taxonomy mismatch.json", mismatch)
+        completed, output = self._run_plan(request_path, out=self.temp_root / "taxonomy-mismatch")
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("TAXON_ID_MISMATCH", completed.stderr)
+        self.assertFalse(output.exists())
+
+    def test_taxonomy_object_requires_explicit_enabled_and_known_fields(self) -> None:
+        for index, taxonomy in enumerate(
+            (
+                {"names_dmp": "names.dmp"},
+                {"enabled": False, "fuzzy": True},
+            ),
+            start=1,
+        ):
+            with self.subTest(taxonomy=taxonomy):
+                def invalid_taxonomy(request: dict[str, Any]) -> None:
+                    request["taxonomy"] = taxonomy
+
+                request_path = self._write_v02_request(
+                    f"invalid taxonomy {index}.json", invalid_taxonomy
+                )
+                completed, output = self._run_plan(
+                    request_path, out=self.temp_root / f"invalid-taxonomy-{index}"
+                )
+                self.assertEqual(completed.returncode, 2)
+                self.assertIn("INVALID_TAXONOMY_PLAN", completed.stderr)
+                self.assertFalse(output.exists())
 
     def test_v02_commands_use_trimal_and_support_aware_iqtree(self) -> None:
         request_path = self._write_v02_request("commands request.json")
@@ -570,8 +703,13 @@ class OfflineWorkflowContractTests(unittest.TestCase):
         references = REPOSITORY_ROOT / "skills" / "bio-gene-to-reference-tree" / "references"
         request_schema = json.loads((references / "request-0.2.schema.json").read_text(encoding="utf-8"))
         plan_schema = json.loads((references / "plan-0.2.schema.json").read_text(encoding="utf-8"))
+        current_plan_schema = json.loads(
+            (references / "plan-0.3.schema.json").read_text(encoding="utf-8")
+        )
         self.assertEqual(request_schema["properties"]["schema_version"]["const"], "0.2")
         self.assertEqual(plan_schema["properties"]["schema_version"]["const"], "0.2")
+        self.assertEqual(current_plan_schema["properties"]["schema_version"]["const"], "0.3")
+        self.assertIn("taxonomy_plan", current_plan_schema["required"])
 
 
 if __name__ == "__main__":
