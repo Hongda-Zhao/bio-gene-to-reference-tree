@@ -2,6 +2,18 @@
 
 Select references to answer the declared biological objective, not to maximize similarity. Keep the complete candidate pool and make every decision reproducible.
 
+## Contents
+
+- [Objective-specific policy](#objective-specific-policy)
+- [Candidate handoff schema](#candidate-handoff-schema)
+- [Deterministic decision order](#deterministic-decision-order)
+- [Stable reason codes](#stable-reason-codes)
+- [MMseqs2 clustering policy](#mmseqs2-clustering-policy)
+- [Coverage, similarity, and domains](#coverage-similarity-and-domains)
+- [Taxonomic balance](#taxonomic-balance)
+- [Outgroup policy](#outgroup-policy)
+- [Mandatory review conditions](#mandatory-review-conditions)
+
 ## Objective-specific policy
 
 ### `ortholog-tree`

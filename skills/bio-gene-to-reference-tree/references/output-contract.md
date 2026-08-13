@@ -2,6 +2,14 @@
 
 Write a new output directory for every planning run. Refuse overwrite. Use UTF-8, LF endings, real tab delimiters, stable ordering, relative artifact paths, and SHA-256 hashes.
 
+## Contents
+
+- [Request contract](#request-contract)
+- [Deterministic planning artifacts](#deterministic-planning-artifacts)
+- [Final host-agent execution artifacts](#final-host-agent-execution-artifacts)
+- [Literature evidence schema](#literature-evidence-schema)
+- [Failure semantics](#failure-semantics)
+
 ## Request contract
 
 Use `schema_version: "0.2"` for new requests and validate the structure against `request-0.2.schema.json`. The helper accepts schema 0.1 only through an in-memory compatibility migration and emits an explicit warning.
