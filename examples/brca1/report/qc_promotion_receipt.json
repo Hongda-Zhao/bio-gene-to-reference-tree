@@ -1,0 +1,33 @@
+{
+  "historical_copy_time_utc": "not-recorded",
+  "historical_copy_utility": "not-recorded",
+  "interpretation": "The promoted files reproduce byte for byte from the recorded summarizer inputs. The historical copy program and time were not retained and are not invented.",
+  "promotions": [
+    {
+      "byte_size": 7165,
+      "historical_source_path": "qc/summary/candidate_qc.tsv",
+      "promoted_destination_path": "qc/candidate_qc.tsv",
+      "sha256": "49c72bc7ea97182f41d3df443d8ac15ee0821f98986766a16d2b5a4d07a79728",
+      "verification": "byte-identical-deterministic-regeneration"
+    },
+    {
+      "byte_size": 12311,
+      "historical_source_path": "qc/summary/candidates.tsv",
+      "promoted_destination_path": "inputs/candidates.tsv",
+      "sha256": "a4e9b44d8ad9dae8b0968902aedd823ed3a2afef60a89e2b72911bbab7078904",
+      "verification": "byte-identical-deterministic-regeneration"
+    }
+  ],
+  "prospective_replay_claimed": false,
+  "record_type": "post-hoc-qc-artifact-promotion-reconciliation",
+  "regeneration_inputs": {
+    "inputs/candidates.faa": "023aaba962252538526a5bea20692e3510271f2ce2b637a5bb70c7140d484a8f",
+    "inputs/candidates.pre-qc.tsv": "04755dc8c953ff7ed5f3203ed9ff590a0cfc919ccc3b1a4b43ba9f4b66199889",
+    "qc/blastp-human-vs-candidates.tsv": "3cda28cface581e4c34b4cc714d3797f5d97d8879e9f48b221e4bb71b2bde37e",
+    "qc/interproscan-pfam-smart.tsv": "6d6ca9f3683ac53a01ef24eb8d45732e67c2604cfa80a9167b8fc58bca4b9d44",
+    "scripts/summarize_brca1_qc.py": "28a24830fe8630edb72575f5a3ad7ec61966d2185e8b8bbaa4da1366016f40f1"
+  },
+  "schema_version": "1.0",
+  "status": "verified",
+  "verified_at_utc": "2026-08-13T12:45:08Z"
+}

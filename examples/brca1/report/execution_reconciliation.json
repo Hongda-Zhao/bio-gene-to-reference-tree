@@ -1,0 +1,337 @@
+{
+  "schema_version": "1.0",
+  "schema_path": "report/execution_reconciliation.schema.json",
+  "analysis_id": "brca1-amniote-worked-example",
+  "status": "reconciled-post-hoc",
+  "publication_disposition": "accepted-with-post-hoc-protocol-deviation",
+  "prospective_command_approval": false,
+  "scientific_equivalence_claimed": false,
+  "executed_inference_started_at_utc": "2026-08-13T13:10:04Z",
+  "reconciled_at_utc": "2026-08-13T13:18:45Z",
+  "reviewer_acknowledgement": "Accepted for publication as a post-hoc protocol deviation. This acknowledgement does not retroactively authorize the non-identical executed argv and does not assert scientific equivalence for non-identical commands.",
+  "canonical_argv_hash": {
+    "algorithm": "sha256",
+    "serialization": "UTF-8 RFC 8259 JSON array with no insignificant whitespace and no trailing newline"
+  },
+  "plan_binding": {
+    "path": "review/plan.json",
+    "sha256": "461c51cf43249a1305ccae816879d60a8416280390aa6bfa6f48a1638164880e",
+    "run_id": "gtr-51d4906dff86327a",
+    "plan_hash": "8b03bd3fae2882a07351fc83f1b8879ee616ed61f60570d029c5ef8471f65da8",
+    "approval_receipt_path": "reference-approval.tsv",
+    "approved_at_utc": "2026-08-13T09:07:46Z"
+  },
+  "ledger_binding": {
+    "path": "report/commands.jsonl",
+    "sha256": "4d14bbb9fa5c6daf35f916a4a70fc67026c17852ec34f41a90b458d90f00be7a"
+  },
+  "artifact_bindings": {
+    "reference_set": {
+      "path": "review/reference_set.faa",
+      "sha256": "cea86b4416bcde376e6d8177a2b51d5cd2a501e458af6da9405e9acd6ed69dd8"
+    },
+    "raw_alignment": {
+      "path": "alignment/alignment.raw.faa",
+      "sha256": "9fd8ffaf87c8400175ddb2f42138e0d63bc7d6598d1d2fc3a44cb8f57c304b10"
+    },
+    "permissive_alignment": {
+      "path": "alignment/alignment.trimmed.permissive.faa",
+      "sha256": "3583521807edd4a29cce586956943811ecab396b82b51b50c3e738c4b7edeb87"
+    },
+    "balanced_alignment": {
+      "path": "alignment/alignment.trimmed.balanced.faa",
+      "sha256": "b3ea66343c7b4ad4129459715d5de7fdf2f053d9d1eb8b77a0a5637b5ef84dd6"
+    },
+    "strict_alignment": {
+      "path": "alignment/alignment.trimmed.strict.faa",
+      "sha256": "e4e693ca4c64d5e4d3900b60177813c6090ee147820187cb8564377d96e99d5a"
+    },
+    "alignment_approval": {
+      "path": "alignment-approval.tsv",
+      "sha256": "9ed7d3e9015fbad8fdd0d3df77e537c3391176fedb22c9641581e7844ca6bfc1"
+    }
+  },
+  "actual_iqtree": {
+    "launch_module_version": "2.4.0",
+    "reported_version": "IQ-TREE multicore version 2.4.0 for Linux x86 64-bit built Feb 7 2025",
+    "started_at_utc": "2026-08-13T13:10:04Z",
+    "exit_code": 0,
+    "wall_seconds": 99,
+    "input_alignment_sha256": "b3ea66343c7b4ad4129459715d5de7fdf2f053d9d1eb8b77a0a5637b5ef84dd6",
+    "version_receipt": {
+      "path": "tree/iqtree/software_version.txt",
+      "sha256": "4ec85e058a26f2eb7dc3c0c674e2be03d7dc0698812a87dadf2dfed115a969ed"
+    },
+    "public_log": {
+      "path": "tree/iqtree/brca1-balanced.log",
+      "sha256": "a149e9d5f7948422aa721723c815ca5d0a9f89cd8b4871745bd02bfc0a3efd23"
+    },
+    "public_treefile": {
+      "path": "tree/iqtree/brca1-balanced.treefile",
+      "sha256": "148580bb39014f9f910c8ad8a1e12cf4b8e2688594d2b3325b6d32f14d8e40af"
+    },
+    "redactions_receipt": {
+      "path": "tree/iqtree/redactions.tsv",
+      "sha256": "038758f4f370e211c2d2ae770f66e0b1d6a895c79848939575fa3d5048670abd"
+    },
+    "raw_output_receipt": {
+      "path": "tree/iqtree/raw-output-receipt.json",
+      "sha256": "e9c035639410984a1af473e6897713c707091417a1af70fd69eaf070208c9d2f"
+    }
+  },
+  "non_promoted_attempts": [
+    {
+      "command_id": "infer-nonpromoted-iqtree3-attempt",
+      "tool": "iqtree3",
+      "reported_module_version": "3.1.3",
+      "started_at_utc": "2026-08-13T09:12:23Z",
+      "elapsed_description": "approximately four hours",
+      "exit_code": 271,
+      "outcome": "canceled",
+      "reason": "The loaded module used one thread despite the requested thread setting, so the attempt was canceled before a publishable result completed.",
+      "promoted": false,
+      "promoted_output_count": 0
+    }
+  ],
+  "command_reconciliations": [
+    {
+      "stage": "alignment",
+      "planned_command_id": "align-proteins",
+      "executed_command_id": "align-einsi",
+      "planned_argv": ["mafft", "--genafpair", "--maxiterate", "1000", "--thread", "8", "reference_set.faa"],
+      "planned_argv_sha256": "40d63dbd7e4d7194eeddb635c0f9dfce34a44d1a51b2f443b5f98ba172b28205",
+      "executed_argv": ["mafft", "--genafpair", "--maxiterate", "1000", "--thread", "8", "review/reference_set.faa"],
+      "executed_argv_sha256": "d33589c40cf8c9358a4d83d758ba24b86f0ef19736571ad42d31de42787f37b0",
+      "exact_argv_match": false,
+      "prospectively_approved": false,
+      "potentially_result_affecting": false,
+      "scientific_parameters_unchanged": {
+        "algorithm": "E-INS-i (--genafpair --maxiterate 1000)",
+        "threads": 8
+      },
+      "input_binding": {
+        "path": "review/reference_set.faa",
+        "sha256": "cea86b4416bcde376e6d8177a2b51d5cd2a501e458af6da9405e9acd6ed69dd8"
+      },
+      "output_binding": {
+        "path": "alignment/alignment.raw.faa",
+        "sha256": "9fd8ffaf87c8400175ddb2f42138e0d63bc7d6598d1d2fc3a44cb8f57c304b10"
+      },
+      "differences": [
+        {
+          "field": "input_path",
+          "category": "path-relocation",
+          "planned": "reference_set.faa",
+          "executed": "review/reference_set.faa",
+          "classification": "path-only-hash-bound",
+          "potentially_result_affecting": false,
+          "explanation": "The executed path resolves the same reference-set bytes bound above; the exact argv still differs."
+        }
+      ]
+    },
+    {
+      "stage": "trim-permissive",
+      "planned_command_id": "trim-permissive",
+      "executed_command_id": "trim-permissive",
+      "planned_argv": ["trimal", "-in", "alignment.raw.faa", "-out", "alignment.trimmed.permissive.faa", "-gt", "0.1"],
+      "planned_argv_sha256": "21cc61ef134e4d7dcdc8d8bee3245fa90279d9578a40fadb2beae940f5e9b845",
+      "executed_argv": ["trimal", "-in", "alignment/alignment.raw.faa", "-out", "alignment/alignment.trimmed.permissive.faa", "-fasta", "-gt", "0.1"],
+      "executed_argv_sha256": "ce8e1dd1bc372c3b7e195d39999c8e3237d5c86b00f5b1ae3203a8f6eb9d7fab",
+      "exact_argv_match": false,
+      "prospectively_approved": false,
+      "potentially_result_affecting": false,
+      "scientific_parameters_unchanged": {
+        "gap_threshold": 0.1
+      },
+      "input_binding": {
+        "path": "alignment/alignment.raw.faa",
+        "sha256": "9fd8ffaf87c8400175ddb2f42138e0d63bc7d6598d1d2fc3a44cb8f57c304b10"
+      },
+      "output_binding": {
+        "path": "alignment/alignment.trimmed.permissive.faa",
+        "sha256": "3583521807edd4a29cce586956943811ecab396b82b51b50c3e738c4b7edeb87"
+      },
+      "differences": [
+        {
+          "field": "input_path",
+          "category": "path-relocation",
+          "planned": "alignment.raw.faa",
+          "executed": "alignment/alignment.raw.faa",
+          "classification": "path-only-hash-bound",
+          "potentially_result_affecting": false,
+          "explanation": "The input relocation is bound to identical raw-alignment bytes."
+        },
+        {
+          "field": "output_path",
+          "category": "path-relocation",
+          "planned": "alignment.trimmed.permissive.faa",
+          "executed": "alignment/alignment.trimmed.permissive.faa",
+          "classification": "output-naming-only",
+          "potentially_result_affecting": false,
+          "explanation": "The output directory changed without changing the trimming threshold."
+        },
+        {
+          "field": "output_format",
+          "category": "added-flag",
+          "planned": null,
+          "executed": "-fasta",
+          "classification": "output-format-only",
+          "potentially_result_affecting": false,
+          "explanation": "The added flag requests FASTA serialization; it remains an exact-command deviation."
+        }
+      ]
+    },
+    {
+      "stage": "trim-balanced",
+      "planned_command_id": "trim-balanced",
+      "executed_command_id": "trim-balanced",
+      "planned_argv": ["trimal", "-in", "alignment.raw.faa", "-out", "alignment.trimmed.balanced.faa", "-gt", "0.5"],
+      "planned_argv_sha256": "3b7cd799f5aef66eb04dbcc673caaf419c816a00c08c26a01ce0d19d84629a57",
+      "executed_argv": ["trimal", "-in", "alignment/alignment.raw.faa", "-out", "alignment/alignment.trimmed.balanced.faa", "-fasta", "-gt", "0.5"],
+      "executed_argv_sha256": "db1f9a54a21ea731c3d97a1704f1907f216bba486dc7e53f7bb9a773a9cad6b5",
+      "exact_argv_match": false,
+      "prospectively_approved": false,
+      "potentially_result_affecting": false,
+      "scientific_parameters_unchanged": {
+        "gap_threshold": 0.5
+      },
+      "input_binding": {
+        "path": "alignment/alignment.raw.faa",
+        "sha256": "9fd8ffaf87c8400175ddb2f42138e0d63bc7d6598d1d2fc3a44cb8f57c304b10"
+      },
+      "output_binding": {
+        "path": "alignment/alignment.trimmed.balanced.faa",
+        "sha256": "b3ea66343c7b4ad4129459715d5de7fdf2f053d9d1eb8b77a0a5637b5ef84dd6"
+      },
+      "differences": [
+        {
+          "field": "input_path",
+          "category": "path-relocation",
+          "planned": "alignment.raw.faa",
+          "executed": "alignment/alignment.raw.faa",
+          "classification": "path-only-hash-bound",
+          "potentially_result_affecting": false,
+          "explanation": "The input relocation is bound to identical raw-alignment bytes."
+        },
+        {
+          "field": "output_path",
+          "category": "path-relocation",
+          "planned": "alignment.trimmed.balanced.faa",
+          "executed": "alignment/alignment.trimmed.balanced.faa",
+          "classification": "output-naming-only",
+          "potentially_result_affecting": false,
+          "explanation": "The output directory changed without changing the trimming threshold."
+        },
+        {
+          "field": "output_format",
+          "category": "added-flag",
+          "planned": null,
+          "executed": "-fasta",
+          "classification": "output-format-only",
+          "potentially_result_affecting": false,
+          "explanation": "The added flag requests FASTA serialization; it remains an exact-command deviation."
+        }
+      ]
+    },
+    {
+      "stage": "trim-strict",
+      "planned_command_id": "trim-strict",
+      "executed_command_id": "trim-strict",
+      "planned_argv": ["trimal", "-in", "alignment.raw.faa", "-out", "alignment.trimmed.strict.faa", "-gt", "0.9"],
+      "planned_argv_sha256": "d81396a3888452be891c04c4d55873327551e578705a0b86afc8047d1a6a970e",
+      "executed_argv": ["trimal", "-in", "alignment/alignment.raw.faa", "-out", "alignment/alignment.trimmed.strict.faa", "-fasta", "-gt", "0.9"],
+      "executed_argv_sha256": "b4c3eaaf9ab7f126fc2cc6ae97c8199529bb129908401bbe2eade6c74f14b8a7",
+      "exact_argv_match": false,
+      "prospectively_approved": false,
+      "potentially_result_affecting": false,
+      "scientific_parameters_unchanged": {
+        "gap_threshold": 0.9
+      },
+      "input_binding": {
+        "path": "alignment/alignment.raw.faa",
+        "sha256": "9fd8ffaf87c8400175ddb2f42138e0d63bc7d6598d1d2fc3a44cb8f57c304b10"
+      },
+      "output_binding": {
+        "path": "alignment/alignment.trimmed.strict.faa",
+        "sha256": "e4e693ca4c64d5e4d3900b60177813c6090ee147820187cb8564377d96e99d5a"
+      },
+      "differences": [
+        {
+          "field": "input_path",
+          "category": "path-relocation",
+          "planned": "alignment.raw.faa",
+          "executed": "alignment/alignment.raw.faa",
+          "classification": "path-only-hash-bound",
+          "potentially_result_affecting": false,
+          "explanation": "The input relocation is bound to identical raw-alignment bytes."
+        },
+        {
+          "field": "output_path",
+          "category": "path-relocation",
+          "planned": "alignment.trimmed.strict.faa",
+          "executed": "alignment/alignment.trimmed.strict.faa",
+          "classification": "output-naming-only",
+          "potentially_result_affecting": false,
+          "explanation": "The output directory changed without changing the trimming threshold."
+        },
+        {
+          "field": "output_format",
+          "category": "added-flag",
+          "planned": null,
+          "executed": "-fasta",
+          "classification": "output-format-only",
+          "potentially_result_affecting": false,
+          "explanation": "The added flag requests FASTA serialization; it remains an exact-command deviation."
+        }
+      ]
+    },
+    {
+      "stage": "final-tree",
+      "planned_command_id": "infer-accurate-tree",
+      "executed_command_id": "infer-primary-tree",
+      "planned_argv": ["iqtree2", "-s", "alignment.trimmed.balanced.faa", "-m", "MFP", "-B", "1000", "-bnni", "-alrt", "1000", "-T", "8", "-seed", "20260813", "--prefix", "gene-tree"],
+      "planned_argv_sha256": "23d333ef5d55c0f22314cb53087967ad5f5d23ce57953a32767b88b0f08b8b3c",
+      "executed_argv": ["iqtree2", "-s", "<private-approved-alignment-path>", "-m", "MFP", "-B", "1000", "-bnni", "-alrt", "1000", "-T", "8", "-seed", "20260813", "--prefix", "brca1-balanced"],
+      "executed_argv_sha256": "51c092e0eeef026238fe0a8c93bc8d07c4659845b1d0e7e463189a6416c9e6d8",
+      "exact_argv_match": false,
+      "prospectively_approved": false,
+      "potentially_result_affecting": false,
+      "scientific_parameters_unchanged": {
+        "model_selection": "MFP",
+        "ufboot2_replicates": 1000,
+        "ufboot_bnni": true,
+        "sh_alrt_replicates": 1000,
+        "threads": 8,
+        "seed": 20260813
+      },
+      "input_binding": {
+        "path": "alignment/alignment.trimmed.balanced.faa",
+        "sha256": "b3ea66343c7b4ad4129459715d5de7fdf2f053d9d1eb8b77a0a5637b5ef84dd6"
+      },
+      "output_binding": {
+        "path": "tree/iqtree/brca1-balanced.treefile",
+        "sha256": "148580bb39014f9f910c8ad8a1e12cf4b8e2688594d2b3325b6d32f14d8e40af"
+      },
+      "differences": [
+        {
+          "field": "input_path",
+          "category": "private-path-tokenization",
+          "planned": "alignment.trimmed.balanced.faa",
+          "executed": "<private-approved-alignment-path>",
+          "classification": "path-only-hash-bound",
+          "potentially_result_affecting": false,
+          "explanation": "The private execution path is withheld, while its content is bound to the approved balanced-alignment SHA-256; this is still a non-identical argv."
+        },
+        {
+          "field": "output_prefix",
+          "category": "output-naming",
+          "planned": "gene-tree",
+          "executed": "brca1-balanced",
+          "classification": "output-naming-only",
+          "potentially_result_affecting": false,
+          "explanation": "The prefix changes output filenames, not an explicit inference setting."
+        }
+      ]
+    }
+  ]
+}

@@ -12,3 +12,13 @@ dist/
 build/
 *.egg-info/
 *.tmp
+
+# BRCA1 worked-example inputs and scheduler residue that are intentionally
+# outside the public, receipt-based artifact bundle.
+examples/brca1/acquisition/
+examples/brca1/pbs-logs/
+examples/brca1/private-iqtree-output/
+examples/brca1/*.o[0-9]*
+examples/brca1/*.e[0-9]*
+examples/brca1/**/*.o[0-9]*
+examples/brca1/**/*.e[0-9]*

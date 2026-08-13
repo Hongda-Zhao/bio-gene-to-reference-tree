@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+#PBS -N brca1_qc
+#PBS -S /bin/bash
+#PBS -q SMALL
+#PBS -l select=1:ncpus=8:mem=32gb
+#PBS -l walltime=04:00:00
+#PBS -j oe
+
+# Run the BRCA1 similarity and terminal-domain checks on gds2.
+# Submit with, for example:
+#   qsub -v BRCA1_RUN_DIR=/absolute/path/to/brca1-run run_brca1_qc.pbs
+#
+# BLAST output columns (one HSP per row; no header):
+#   qseqid sseqid nident length mismatch gapopen qstart qend sstart send
+#   evalue bitscore qlen slen
+#
+# The downstream summarizer deliberately receives every reported HSP so that it
+# can calculate union query/subject coverage instead of mistaking the best HSP
+# for full-length coverage.
+
+set -euo pipefail
+IFS=$'\n\t'
+umask 027
+
+: "${BRCA1_RUN_DIR:?Submit with -v BRCA1_RUN_DIR=/absolute/path/to/brca1-run}"
+
+if [[ "${BRCA1_RUN_DIR}" != /* ]]; then
+  printf 'BRCA1_RUN_DIR must be an absolute path: %s\n' "${BRCA1_RUN_DIR}" >&2
+  exit 2
+fi
+
+LOG_DIR="${BRCA1_RUN_DIR}/pbs-logs"
+mkdir -p -- "${LOG_DIR}"
+DIRECT_LOG="${LOG_DIR}/candidate-qc.${PBS_JOBID:-manual}.log"
+if [[ -e "${DIRECT_LOG}" ]]; then
+  printf 'Refusing to overwrite existing job log: %s\n' "${DIRECT_LOG}" >&2
+  exit 2
+fi
+exec > "${DIRECT_LOG}" 2>&1
+
+INPUT_DIR="${BRCA1_RUN_DIR}/inputs"
+QC_DIR="${BRCA1_RUN_DIR}/qc"
+QUERY_FASTA="${INPUT_DIR}/query.faa"
+CANDIDATE_FASTA="${INPUT_DIR}/candidates.faa"
+BLAST_OUTPUT="${QC_DIR}/blastp-human-vs-candidates.tsv"
+INTERPRO_OUTPUT="${QC_DIR}/interproscan-pfam-smart.tsv"
+VERSION_OUTPUT="${QC_DIR}/software_versions.tsv"
+
+for required in "${QUERY_FASTA}" "${CANDIDATE_FASTA}"; do
+  if [[ ! -s "${required}" ]]; then
+    printf 'Required non-empty input is missing: %s\n' "${required}" >&2
+    exit 2
+  fi
+done
+
+mkdir -p -- "${QC_DIR}"
+for output in "${BLAST_OUTPUT}" "${INTERPRO_OUTPUT}" "${VERSION_OUTPUT}"; do
+  if [[ -e "${output}" ]]; then
+    printf 'Refusing to overwrite existing QC output: %s\n' "${output}" >&2
+    exit 2
+  fi
+done
+
+if [[ -r /usr/appli/freeware/Modules/init/bash ]]; then
+  # shellcheck source=/dev/null
+  source /usr/appli/freeware/Modules/init/bash
+elif [[ -r /etc/profile.d/modules.sh ]]; then
+  # shellcheck source=/dev/null
+  source /etc/profile.d/modules.sh
+fi
+if ! command -v module >/dev/null 2>&1; then
+  printf 'The environment-modules command is unavailable.\n' >&2
+  exit 2
+fi
+
+module purge
+module load blast+/2.17.0
+module load InterProScan/5.72-103.0
+
+if ! command -v blastp >/dev/null 2>&1; then
+  printf 'blastp was not exposed by blast+/2.17.0.\n' >&2
+  exit 2
+fi
+if ! command -v interproscan.sh >/dev/null 2>&1; then
+  printf 'interproscan.sh was not exposed by InterProScan/5.72-103.0.\n' >&2
+  exit 2
+fi
+
+{
+  printf 'component\tversion\n'
+  printf 'BLASTP\t'
+  blastp -version 2>&1 | sed -n '1p'
+  printf 'InterProScan\t'
+  interproscan.sh --version 2>&1 | sed -n '1p'
+  printf 'Pfam\t37.1\n'
+  printf 'SMART\t9.0\n'
+} > "${VERSION_OUTPUT}"
+
+blastp \
+  -query "${QUERY_FASTA}" \
+  -subject "${CANDIDATE_FASTA}" \
+  -evalue 1e-5 \
+  -seg yes \
+  -soft_masking true \
+  -outfmt '6 qseqid sseqid nident length mismatch gapopen qstart qend sstart send evalue bitscore qlen slen' \
+  -out "${BLAST_OUTPUT}"
+
+if [[ ! -s "${BLAST_OUTPUT}" ]]; then
+  printf 'BLASTP completed without reporting any HSPs.\n' >&2
+  exit 1
+fi
+
+interproscan.sh \
+  -i "${CANDIDATE_FASTA}" \
+  -f TSV \
+  -appl Pfam,SMART \
+  -iprlookup \
+  -dp \
+  -cpu 8 \
+  -o "${INTERPRO_OUTPUT}"
+
+if [[ ! -s "${INTERPRO_OUTPUT}" ]]; then
+  printf 'InterProScan completed without producing a non-empty TSV.\n' >&2
+  exit 1
+fi
+
+sha256sum "${BLAST_OUTPUT}" "${INTERPRO_OUTPUT}" > "${QC_DIR}/checksums.sha256"
+
+printf 'BRCA1 QC inputs completed successfully.\n'
+printf 'BLAST HSPs: %s\n' "${BLAST_OUTPUT}"
+printf 'InterProScan hits: %s\n' "${INTERPRO_OUTPUT}"

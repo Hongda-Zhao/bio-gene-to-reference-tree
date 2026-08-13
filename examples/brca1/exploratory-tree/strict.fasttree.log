@@ -1,0 +1,24 @@
+FastTree Version 2.2.0 Double precision
+Alignment: alignment/alignment.trimmed.strict.faa
+Amino acid distances: BLOSUM45 Joins: balanced Support: SH-like 1000
+Search: Normal +NNI +SPR (2 rounds range 10) +ML-NNI opt-each=1
+TopHits: 1.00*sqrtN close=default refresh=0.80
+ML Model: Whelan-And-Goldman, CAT approximation with 20 rate categories
+Initial topology in 0.01 seconds
+Refining topology: 17 rounds ME-NNIs, 2 rounds ME-SPRs, 8 rounds ML-NNIs
+      0.13 seconds: ME NNI round 11 of 17, 1 of 16 splits
+Total branch-length 5.805 after 0.14 sec
+ML-NNI round 1: LogLk = -38422.067 NNIs 2 max delta 5.16 Time 0.32
+      0.31 seconds: Site likelihoods with rate category 1 of 20
+Switched to using 20 rate categories (CAT approximation)
+Rate categories were divided by 0.931 so that average rate = 1.0
+CAT-based log-likelihoods may not be comparable across runs
+ML-NNI round 2: LogLk = -36456.328 NNIs 0 max delta 0.00 Time 0.47
+Turning off heuristics for final round of ML NNIs (converged)
+      0.47 seconds: ML NNI round 3 of 8, 1 of 16 splits
+ML-NNI round 3: LogLk = -36422.451 NNIs 0 max delta 0.00 Time 0.62 (final)
+      0.62 seconds: ML Lengths 1 of 16 splits
+Optimize all lengths: LogLk = -36422.034 Time 0.67
+      0.81 seconds: Site likelihoods with rate category 1 of 20
+Gamma(20) LogLk = -37650.445 alpha = 1.652 rescaling lengths by 1.075
+Total time: 0.91 seconds Unique: 18/18 Bad splits: 0/15

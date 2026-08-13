@@ -1,0 +1,19 @@
+accession	sequence_sha256	taxon_id	species	gene_id	sequence_length	annotation_release	annotation_release_date	decision
+NP_009225.1	80d7199c8d1550a5ba8387043481c1acf0f070df410b47c2bc1375584b59bdf1	9606	Homo sapiens	672	1863	GCF_000001405.40-RS_2025_08	2025-08-01	RefSeq isoform 1; focal sequence
+NP_001038958.1	bb3412c20abc375883b35d6159f0b1b00112d082d28057e905dfd45b090158ec	9598	Pan troglodytes	449497	1863	GCF_028858775.2-RS_2026_05	2026-05-20	RefSeq NP record
+NP_033894.3	9efbb1366f2c40eebf0fda72143cbb1071dfe57aca96ebb611a99cc91b60be93	10090	Mus musculus	12189	1812	GCF_000001635.27-RS_2024_02	2024-02-01	RefSeq NP record
+XP_017204702.2	aa15863e282e7be0befbfc2263deac23d7697a9e14646d5d9ee14fd69f348696	9986	Oryctolagus cuniculus	100347269	1853	GCF_964237555.1-RS_2024_11	2024-11-21	full-length predicted X1 representative
+NP_001013434.1	2030202149df889701bdbdcbc3538b789e3a065df6fa62a8cb3d027180bdc258	9615	Canis lupus familiaris	403437	1878	NCBI Canis lupus familiaris Annotation Release 106	2020-12-08	RefSeq NP record
+NP_848668.1	7dc769c839eccc50a8969b35fd386787f1e1baff39d2934c27c1fb04d9b6b297	9913	Bos taurus	353120	1849	GCF_002263795.3-RS_2024_12	2024-12-22	RefSeq NP record
+XP_014595447.2	89a98b8379caaec48356b09457bb9dc87080046c1ee86603021599319ab4b1f4	9796	Equus caballus	100051990	1856	GCF_041296265.1-RS_2024_12	2024-12-06	full-length predicted X1 representative
+XP_003414318.3	455a323cba4bba31d09d7017f08268d2bde12c8df77b882848a7c1e203b38f3e	9785	Loxodonta africana	100653763	1858	GCF_030014295.1-RS_2024_04	2024-04-02	full-length predicted representative
+XP_058140293.1	6c608533ec051e665321d36b75e716f83f04864ff3f80a94c07a1a8ad88ae890	9361	Dasypus novemcinctus	101429125	1839	GCF_030445035.2-RS_2025_01	2025-01-30	full-length predicted X1 representative
+NP_001029141.1	10afcd37e6b72aa91da338d282402fba97a45cc2668411cb2af722c1b7ec4038	13616	Monodelphis domestica	554178	1840	GCF_027887165.2-RS_2026_06	2026-06-23	RefSeq NP record
+NP_989500.1	1e9921c11fc3110efeda127ffab8f4f5cda0240f8afed4e7bc0170eb78a27f4d	9031	Gallus gallus	373983	1749	NCBI Gallus gallus Annotation Release 106	2021-12-23	RefSeq NP record
+XP_072775070.1	0a4fc6f08bfce3fc5667eb5d377e2ef505cdd7f70730d04aef0be379c7123a5a	59729	Taeniopygia guttata	100224649	1803	GCF_048771995.1-RS_2025_04	2025-04-02	predicted X1; X2 logged as an alternative
+XP_019406054.1	6364488fb8917b6fe32c2f1e07aaffa9d52552f79fdcc5f41262ded2c1056609	8502	Crocodylus porosus	109320418	1845	NCBI Crocodylus porosus Annotation Release 100	2016-12-12	only protein in current NCBI package
+XP_023967135.2	3f0729614fd813417d8d137b74d74f4b68e9c833291720a4b8d3db178faaff2c	8478	Chrysemys picta bellii	101942702	1908	GCF_011386835.1-RS_2024_05	2024-05-29	full-length predicted X1 representative
+XP_008111382.1	21723306572cd252ffe771d97f5f76c41d1ecaad32632407acc1f77dda867ab3	28377	Anolis carolinensis	100553919	1697	GCF_035594765.1-RS_2024_02	2024-02-01	predicted X1 representative
+XP_026576759.1	ca4a73f151eea970d6f9d32aef847bac3e41f619e42eea043513a1719222e31a	8673	Pseudonaja textilis	113449821	1563	NCBI Pseudonaja textilis Annotation Release 100	2018-10-09	shorter model retained only after terminal-domain QC
+NP_001107963.1	2c0867acc18f63c71c88eeed6c6dd7c805c5805ccb07cf305150e1e4ad8ecfb1	8364	Xenopus tropicalis	733513	1592	NCBI Xenopus tropicalis Annotation Release 104	2019-12-06	RefSeq NP amphibian outgroup
+XP_029429046.1	a153defd494517318bed78d6d815b33414b090bb364843355551660f698f8273	194408	Rhinatrema bivittatum	115074072	1920	GCF_901001135.2-RS_2026_03	2026-03-02	full-length predicted X1 amphibian outgroup

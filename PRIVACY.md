@@ -1,6 +1,10 @@
 # Privacy
 
-This repository contains no telemetry or hosted service. The bundled `plan` command performs no network requests and does not inspect credentials.
+This repository contains no telemetry or hosted service. The bundled `plan`
+command performs no network requests and does not inspect credentials. The
+separate third-party `skills` installer recommended in the README reports
+anonymous installation telemetry unless it is run with
+`DISABLE_TELEMETRY=1`; that installer behavior is not repository telemetry.
 
 Users and host agents remain responsible for every external database, literature, structure, or iTOL request. Obtain explicit permission before transmitting an unpublished sequence, unpublished tree, or sensitive sample metadata. Treat permissions as endpoint-specific: approval for BLAST does not automatically authorize iTOL or another service.
 

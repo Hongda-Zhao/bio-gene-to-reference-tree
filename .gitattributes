@@ -1,0 +1,12 @@
+* text=auto eol=lf
+*.pdf -text
+*.gz -text
+*.log -text -diff
+
+# Preserve byte-exact native program reports and intentional empty TSV cells.
+# Their original/public hashes are part of the BRCA1 audit trail.
+examples/brca1/tree/iqtree/*.iqtree -text -diff
+examples/brca1/tree/iqtree/*.mldist -text -diff
+examples/brca1/tree/iqtree/*.nex -text -diff
+examples/brca1/tree/iqtree/software_version.txt -text -diff
+examples/brca1/tree/clade_support.tsv -text -diff

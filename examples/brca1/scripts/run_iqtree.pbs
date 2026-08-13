@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+#PBS -N brca1_iqtree
+#PBS -S /bin/bash
+#PBS -q SMALL
+#PBS -l select=1:ncpus=8:mem=32gb
+#PBS -l walltime=12:00:00
+#PBS -j n
+
+set -euo pipefail
+
+: "${BRCA1_RUN_DIR:?submit with qsub -v BRCA1_RUN_DIR=/absolute/run/path}"
+if [[ "${BRCA1_RUN_DIR}" != /* ]]; then
+  echo "BRCA1_RUN_DIR must be absolute" >&2
+  exit 2
+fi
+
+ALIGNMENT="${BRCA1_RUN_DIR}/alignment/alignment.trimmed.balanced.faa"
+APPROVAL="${BRCA1_RUN_DIR}/alignment-approval.tsv"
+DOMAIN_REPORT="${BRCA1_RUN_DIR}/alignment/qc/domain_retention.tsv"
+DOMAIN_APPROVAL="${BRCA1_RUN_DIR}/domain-retention-approval.tsv"
+EXPECTED_ALIGNMENT_SHA256="b3ea66343c7b4ad4129459715d5de7fdf2f053d9d1eb8b77a0a5637b5ef84dd6"
+EXPECTED_DOMAIN_REPORT_SHA256="f492fe17f326cdd7576857c9620438d178da7a8cd39ca9195ffa2b63acf45777"
+if [[ ! -s "${ALIGNMENT}" || ! -s "${APPROVAL}" || \
+      ! -s "${DOMAIN_REPORT}" || ! -s "${DOMAIN_APPROVAL}" ]]; then
+  echo "Approved alignment, domain audit, or approval receipt is missing" >&2
+  exit 2
+fi
+ACTUAL_DOMAIN_REPORT_SHA256="$(sha256sum "${DOMAIN_REPORT}" | cut -d ' ' -f 1)"
+if [[ "${ACTUAL_DOMAIN_REPORT_SHA256}" != "${EXPECTED_DOMAIN_REPORT_SHA256}" ]]; then
+  echo "Domain-retention report hash mismatch" >&2
+  exit 2
+fi
+if ! awk -F '\t' -v expected="${EXPECTED_DOMAIN_REPORT_SHA256}" '
+  $1 == "audit_sha256" && $2 == expected { hash_ok = 1 }
+  $1 == "decision" && $2 ~ /^approved;/ { decision_ok = 1 }
+  END { exit !(hash_ok && decision_ok) }
+' "${DOMAIN_APPROVAL}"; then
+  echo "Domain-retention approval is not bound to the expected passing audit" >&2
+  exit 2
+fi
+ACTUAL_ALIGNMENT_SHA256="$(sha256sum "${ALIGNMENT}" | cut -d ' ' -f 1)"
+if [[ "${ACTUAL_ALIGNMENT_SHA256}" != "${EXPECTED_ALIGNMENT_SHA256}" ]]; then
+  echo "Approved alignment hash mismatch" >&2
+  exit 2
+fi
+if ! awk -F '\t' -v expected="${EXPECTED_ALIGNMENT_SHA256}" \
+  '$1 == "alignment_sha256" && $2 == expected { found = 1 } END { exit !found }' \
+  "${APPROVAL}"; then
+  echo "Approval receipt is not bound to the expected alignment hash" >&2
+  exit 2
+fi
+
+LOG_DIR="${BRCA1_RUN_DIR}/pbs-logs"
+TREE_DIR="${BRCA1_RUN_DIR}/tree/iqtree"
+mkdir -p -- "${LOG_DIR}" "${BRCA1_RUN_DIR}/tree"
+if [[ -e "${TREE_DIR}" ]]; then
+  echo "Refusing to overwrite an existing IQ-TREE output directory" >&2
+  exit 2
+fi
+mkdir "${TREE_DIR}"
+DIRECT_LOG="${LOG_DIR}/iqtree.${PBS_JOBID:-manual}.log"
+if [[ -e "${DIRECT_LOG}" ]]; then
+  echo "Refusing to overwrite existing job log" >&2
+  exit 2
+fi
+exec > "${DIRECT_LOG}" 2>&1
+
+if [[ -r /usr/appli/freeware/Modules/init/bash ]]; then
+  source /usr/appli/freeware/Modules/init/bash
+elif [[ -r /etc/profile.d/modules.sh ]]; then
+  source /etc/profile.d/modules.sh
+fi
+module purge
+module load iqtree/2.4.0
+
+cd "${TREE_DIR}"
+iqtree2 \
+  -s "${ALIGNMENT}" \
+  -m MFP \
+  -B 1000 \
+  -bnni \
+  -alrt 1000 \
+  -T 8 \
+  -seed 20260813 \
+  --prefix brca1-balanced
+
+iqtree2 --version > software_version.txt 2>&1
+sha256sum brca1-balanced.* > checksums.sha256

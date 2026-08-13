@@ -1,0 +1,11 @@
+clade_id	hypothesis_role	target_tip_count	target_tips	recovery_status	node_id	node_label	support_status	sh_alrt	ufboot
+Amphibia	comparison_clade	2	NP_001107963.1,XP_029429046.1	recovered	35	99.6/100	available	99.6	100
+Mammalia	comparison_clade	10	NP_009225.1,NP_001038958.1,NP_033894.3,XP_017204702.2,NP_001013434.1,NP_848668.1,XP_014595447.2,XP_003414318.3,XP_058140293.1,NP_001029141.1	recovered	21	100/100	available	100	100
+Sauropsida	comparison_clade	6	NP_989500.1,XP_072775070.1,XP_019406054.1,XP_023967135.2,XP_008111382.1,XP_026576759.1	recovered	30	97.1/97	available	97.1	97
+Primates	comparison_clade	2	NP_009225.1,NP_001038958.1	recovered	25	100/100	available	100	100
+Glires	comparison_clade	2	NP_033894.3,XP_017204702.2	recovered	26	80.3/77	available	80.3	77
+Aves	comparison_clade	2	NP_989500.1,XP_072775070.1	recovered	33	100/100	available	100	100
+Lepidosauria	comparison_clade	2	XP_008111382.1,XP_026576759.1	recovered	34	100/100	available	100	100
+Archelosauria	comparison_clade	4	XP_023967135.2,XP_019406054.1,NP_989500.1,XP_072775070.1	recovered	31	99.9/100	available	99.9	100
+Archosauria	comparison_clade	3	XP_019406054.1,NP_989500.1,XP_072775070.1	recovered	32	77.3/79	available	77.3	79
+Crocodylia+Testudines	explicit_alternative	2	XP_019406054.1,XP_023967135.2	not-recovered			not_recovered		

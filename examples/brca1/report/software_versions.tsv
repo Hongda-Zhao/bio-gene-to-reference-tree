@@ -1,0 +1,20 @@
+stage	component	version	evidence
+acquisition	NCBI Datasets CLI	18.6.0	PROVENANCE.md source receipt
+planning	Python	3.10.4	local planner runtime
+planning	gene_to_tree.py	0.3.0	skills/bio-gene-to-reference-tree/scripts/gene_to_tree.py
+taxonomy	ncbi_taxonomy.py	0.1.0	skills/bio-gene-to-reference-tree/scripts/ncbi_taxonomy.py
+candidate-qc	BLASTP	2.17.0+	qc/software_versions.tsv
+candidate-qc	InterProScan	5.72-103.0	qc/software_versions.tsv
+candidate-qc	Pfam	37.1	qc/software_versions.tsv
+candidate-qc	SMART	9.0	qc/software_versions.tsv
+alignment	MAFFT	7.526	alignment/mafft.stderr.log
+alignment	trimAl	1.5.1	pinned execution module and public PBS script
+exploratory-tree	FastTree	2.2.0 Double precision	exploratory-tree/balanced.fasttree.log
+alignment-qc	Python	3.11.7	pinned execution module and public PBS script
+final-tree	IQ-TREE	2.4.0 built 2025-02-07	tree/iqtree/software_version.txt
+postprocess	R	4.4.1	figure settings and local runtime
+postprocess	ape	5.8.1	figure settings
+visualization	ggplot2	4.0.1	figure settings
+visualization	ggtree	3.14.0	figure settings
+visualization	openssl	2.3.4	figure settings
+visualization	svglite	2.2.2	figure settings

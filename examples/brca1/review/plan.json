@@ -1,0 +1,533 @@
+{
+  "alignment_plan": {
+    "mode": "einsi",
+    "qc_required_before_trimming": true,
+    "raw_alignment": "alignment.raw.faa",
+    "threads": 8,
+    "tool": "mafft"
+  },
+  "annotation_plan": {
+    "colors": {
+      "expanded": "#009E73",
+      "outgroup": "#999999",
+      "study": "#E69F00"
+    },
+    "itol_colorstrip": "itol_roles.txt",
+    "local_ggtree_renderer": {
+      "default_outputs": [
+        "SVG",
+        "PDF",
+        "settings TSV"
+      ],
+      "engine": "ggtree+ggplot2",
+      "joins": "exact tip_id equality",
+      "reroots_tree": false,
+      "script": "scripts/render_tree_ggtree.R",
+      "status": "post-tree-local"
+    },
+    "range_dataset": "disabled",
+    "sequence_metadata": "sequence_metadata.tsv"
+  },
+  "approval": null,
+  "candidate_and_selection_counts": {
+    "candidate_records_including_query": 18,
+    "rejected_records": 0,
+    "selected_records_including_query": 18,
+    "selected_references_excluding_query": 17,
+    "selected_references_excluding_study": 17
+  },
+  "candidate_semantic_hash": "d1d23d2c9c0a0a135bbdcfffa86e5365bdff61c5f21c156842aa4c8d4438dcd6",
+  "clustering_plan": {
+    "algorithm": "easy-linclust",
+    "cluster_ids_complete": false,
+    "command": {
+      "argv": [
+        "mmseqs",
+        "easy-linclust",
+        "expanded_candidates.faa",
+        "clusters",
+        "mmseqs_tmp",
+        "--min-seq-id",
+        "0.95",
+        "-c",
+        "0.8",
+        "--cov-mode",
+        "0",
+        "--threads",
+        "8"
+      ],
+      "executed": false,
+      "id": "cluster-expanded-candidates",
+      "inputs": [
+        "expanded_candidates.faa"
+      ],
+      "outputs": [
+        "clusters_cluster.tsv",
+        "clusters_rep_seq.fasta"
+      ],
+      "stage": "cluster-candidates",
+      "status": "skipped",
+      "tool": "mmseqs2"
+    },
+    "coverage": 0.8,
+    "coverage_mode": 0,
+    "expanded_candidate_count": 15,
+    "min_seq_id": 0.95,
+    "mode": "auto",
+    "preserve_analysis_groups": [
+      "study",
+      "outgroup"
+    ],
+    "protected_analysis_groups": [
+      "study",
+      "outgroup"
+    ],
+    "replan_required_after_execution": false,
+    "status": "not-needed",
+    "threads": 8,
+    "tool": "mmseqs2",
+    "trigger_min_sequences": 200,
+    "triggered": false
+  },
+  "created_at": null,
+  "decision_gates": [
+    {
+      "id": "reference-and-outgroup",
+      "requires": [
+        "selected references",
+        "paralog policy",
+        "outgroup rationale",
+        "taxonomy evidence when enabled"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "alignment-and-trimming-qc",
+      "requires": [
+        "raw MSA QC",
+        "trim profile comparison",
+        "primary alignment choice"
+      ],
+      "status": "not-reached"
+    }
+  ],
+  "hard_stops": [],
+  "input_hashes": {
+    "candidate_fasta": {
+      "logical_path": "inputs/candidates.faa",
+      "sha256": "023aaba962252538526a5bea20692e3510271f2ce2b637a5bb70c7140d484a8f"
+    },
+    "candidate_table": {
+      "logical_path": "inputs/candidates.tsv",
+      "sha256": "a4e9b44d8ad9dae8b0968902aedd823ed3a2afef60a89e2b72911bbab7078904"
+    },
+    "query_fasta": {
+      "logical_path": "inputs/query.faa",
+      "sha256": "ef86d20031f519df3b0c9878e77c5755ba8ce0a5964e7b3a0ac26d0c8bddd3b5"
+    },
+    "request": {
+      "logical_path": "inputs/request.json",
+      "sha256": "6f1768ff52ad0ec4785796a6733de95bc3bf28087528e1b8d1f394c7ee33814e"
+    },
+    "taxonomy_names": {
+      "logical_path": "inputs/names.dmp",
+      "sha256": "c3aac85da1bf473792e95bf8fe2d6933dcb31f2d649a3f8579e21011d772dca9"
+    },
+    "taxonomy_nodes": {
+      "logical_path": "inputs/nodes.dmp",
+      "sha256": "502ef4e7f1a8383e89d759b056524e8bcc16fe6950965f972d13f44411430f17"
+    }
+  },
+  "literature_plan": {
+    "enabled": true,
+    "exact_taxon_then_escalate": true,
+    "gene_tree_species_tree_comparison": "qualitative; discordance is not automatically an error",
+    "include_foundational": true,
+    "sources": [
+      "primary phylogenomic literature",
+      "NCBI Orthologs methodology",
+      "NCBI Taxonomy"
+    ],
+    "status": "pending-live-evidence-search",
+    "taxon_fallback_ranks": [
+      "species",
+      "genus",
+      "family",
+      "order",
+      "class"
+    ],
+    "years_back": 10
+  },
+  "mode": "offline-dry-run",
+  "objective": "ortholog-tree",
+  "offline": true,
+  "outgroup_accessions": [
+    "NP_001107963.1",
+    "XP_029429046.1"
+  ],
+  "plan_hash": "8b03bd3fae2882a07351fc83f1b8879ee616ed61f60570d029c5ef8471f65da8",
+  "planned_commands": [
+    {
+      "argv": [
+        "mafft",
+        "--genafpair",
+        "--maxiterate",
+        "1000",
+        "--thread",
+        "8",
+        "reference_set.faa"
+      ],
+      "executed": false,
+      "id": "align-proteins",
+      "inputs": [
+        "reference_set.faa"
+      ],
+      "outputs": [
+        "alignment.raw.faa"
+      ],
+      "stage": "align-and-qc",
+      "status": "planned",
+      "stdout": "alignment.raw.faa",
+      "tool": "mafft"
+    },
+    {
+      "argv": [
+        "trimal",
+        "-in",
+        "alignment.raw.faa",
+        "-out",
+        "alignment.trimmed.permissive.faa",
+        "-gt",
+        "0.1"
+      ],
+      "executed": false,
+      "id": "trim-permissive",
+      "inputs": [
+        "alignment.raw.faa"
+      ],
+      "outputs": [
+        "alignment.trimmed.permissive.faa"
+      ],
+      "stage": "trim-and-qc",
+      "status": "planned",
+      "stdout": null,
+      "threshold_semantics": "Retain columns whose fraction of non-gap residues meets the configured threshold.",
+      "tool": "trimal"
+    },
+    {
+      "argv": [
+        "trimal",
+        "-in",
+        "alignment.raw.faa",
+        "-out",
+        "alignment.trimmed.balanced.faa",
+        "-gt",
+        "0.5"
+      ],
+      "executed": false,
+      "id": "trim-balanced",
+      "inputs": [
+        "alignment.raw.faa"
+      ],
+      "outputs": [
+        "alignment.trimmed.balanced.faa"
+      ],
+      "stage": "trim-and-qc",
+      "status": "planned",
+      "stdout": null,
+      "threshold_semantics": "Retain columns whose fraction of non-gap residues meets the configured threshold.",
+      "tool": "trimal"
+    },
+    {
+      "argv": [
+        "trimal",
+        "-in",
+        "alignment.raw.faa",
+        "-out",
+        "alignment.trimmed.strict.faa",
+        "-gt",
+        "0.9"
+      ],
+      "executed": false,
+      "id": "trim-strict",
+      "inputs": [
+        "alignment.raw.faa"
+      ],
+      "outputs": [
+        "alignment.trimmed.strict.faa"
+      ],
+      "stage": "trim-and-qc",
+      "status": "planned",
+      "stdout": null,
+      "threshold_semantics": "Retain columns whose fraction of non-gap residues meets the configured threshold.",
+      "tool": "trimal"
+    },
+    {
+      "argv": [
+        "iqtree2",
+        "-s",
+        "alignment.trimmed.balanced.faa",
+        "-m",
+        "MFP",
+        "-B",
+        "1000",
+        "-bnni",
+        "-alrt",
+        "1000",
+        "-T",
+        "8",
+        "-seed",
+        "20260813",
+        "--prefix",
+        "gene-tree"
+      ],
+      "executed": false,
+      "id": "infer-accurate-tree",
+      "inputs": [
+        "alignment.trimmed.balanced.faa"
+      ],
+      "outputs": [
+        "gene-tree.treefile",
+        "gene-tree.contree",
+        "gene-tree.iqtree"
+      ],
+      "stage": "infer-tree",
+      "status": "planned",
+      "stdout": null,
+      "support_semantics": "UFBoot2; interpret >=95 separately from standard bootstrap.",
+      "tool": "iqtree2"
+    }
+  ],
+  "privacy": {
+    "remote_search_allowed": true,
+    "unpublished_sequence": false
+  },
+  "project_id": "brca1-amniote-worked-example",
+  "query": {
+    "id": "NP_009225.1",
+    "length": 1863,
+    "organism": "Homo sapiens",
+    "original_kind": "protein-fasta",
+    "original_value": "NP_009225.1",
+    "sequence_sha256": "80d7199c8d1550a5ba8387043481c1acf0f070df410b47c2bc1375584b59bdf1",
+    "taxon_id": "9606"
+  },
+  "query_resolution": {
+    "gene_name": "BRCA1",
+    "live_lookup_performed_by_planner": false,
+    "protein_name": "BRCA1 DNA repair associated, isoform 1",
+    "retrieved_at": "2026-08-13",
+    "source_db": "NCBI RefSeq",
+    "source_release": "GCF_000001405.40-RS_2025_08",
+    "status": "materialized-local-record"
+  },
+  "reference_discovery": {
+    "fallback_tiers": [
+      "NCBI Orthologs gene group 672",
+      "NCBI RefSeq protein",
+      "terminal-domain architecture review"
+    ],
+    "status": "provided-local-candidate-bundle",
+    "strategy": "ortholog-first"
+  },
+  "rejected_accessions_and_reasons": [],
+  "request_schema_version": "0.2",
+  "rooting_plan": {
+    "executed": false,
+    "method": "outgroup",
+    "outgroup_accessions": [
+      "NP_001107963.1",
+      "XP_029429046.1"
+    ],
+    "preserve_unrooted": true
+  },
+  "run_id": "gtr-51d4906dff86327a",
+  "schema_version": "0.3",
+  "scientific_scope": {
+    "claim": "gene-tree",
+    "not_a_species_tree": true,
+    "objective": "ortholog-tree"
+  },
+  "selected_accessions": [
+    "NP_009225.1",
+    "XP_003414318.3",
+    "XP_072775070.1",
+    "NP_989500.1",
+    "XP_019406054.1",
+    "NP_033894.3",
+    "XP_017204702.2",
+    "NP_001013434.1",
+    "XP_014595447.2",
+    "NP_848668.1",
+    "XP_008111382.1",
+    "XP_026576759.1",
+    "NP_001029141.1",
+    "NP_001038958.1",
+    "XP_023967135.2",
+    "XP_058140293.1",
+    "NP_001107963.1",
+    "XP_029429046.1"
+  ],
+  "selection_parameters": {
+    "allow_paralogs": false,
+    "max_length_ratio": 1.1,
+    "max_per_taxon": 1,
+    "max_references": 17,
+    "min_ingroup_taxa": 15,
+    "min_length_ratio": 0.75,
+    "min_query_coverage": 0.1,
+    "min_target_coverage": 0.1,
+    "outgroup_count": 2,
+    "require_outgroup": true
+  },
+  "selection_summary": {
+    "blockers": [],
+    "query_id": "NP_009225.1",
+    "query_length": 1863,
+    "rejected_count": 0,
+    "selected_accessions": [
+      "NP_009225.1",
+      "XP_003414318.3",
+      "XP_072775070.1",
+      "NP_989500.1",
+      "XP_019406054.1",
+      "NP_033894.3",
+      "XP_017204702.2",
+      "NP_001013434.1",
+      "XP_014595447.2",
+      "NP_848668.1",
+      "XP_008111382.1",
+      "XP_026576759.1",
+      "NP_001029141.1",
+      "NP_001038958.1",
+      "XP_023967135.2",
+      "XP_058140293.1",
+      "NP_001107963.1",
+      "XP_029429046.1"
+    ],
+    "selected_ingroup_taxa": 15,
+    "selected_outgroups": [
+      "NP_001107963.1",
+      "XP_029429046.1"
+    ],
+    "selected_study_sequences": [
+      "NP_009225.1"
+    ],
+    "unsampled_candidate_ingroup_clades": []
+  },
+  "sequence_context": "cellular",
+  "stages": [
+    {
+      "id": "intake",
+      "status": "completed"
+    },
+    {
+      "id": "resolve-query",
+      "method": "local protein FASTA",
+      "status": "completed"
+    },
+    {
+      "id": "discover-candidates",
+      "method": "provided local candidate bundle; no database query",
+      "status": "completed"
+    },
+    {
+      "id": "cluster-candidates",
+      "protected": [
+        "study",
+        "outgroup"
+      ],
+      "status": "not-needed"
+    },
+    {
+      "id": "select-references",
+      "status": "completed"
+    },
+    {
+      "id": "align-and-qc",
+      "status": "planned"
+    },
+    {
+      "id": "trim-and-qc",
+      "status": "planned"
+    },
+    {
+      "id": "infer-tree",
+      "status": "planned",
+      "tree_state": "unrooted"
+    },
+    {
+      "id": "root-and-annotate",
+      "status": "planned"
+    },
+    {
+      "id": "literature-context",
+      "status": "pending"
+    }
+  ],
+  "state": "pending-reference-approval",
+  "taxon_scope": {
+    "ingroup": "Amniota",
+    "outgroup": "Amphibia: one anuran and one caecilian NCBI ortholog"
+  },
+  "taxonomy_plan": {
+    "enabled": true,
+    "match_mode": "exact-scientific-name",
+    "names_sha256": "c3aac85da1bf473792e95bf8fe2d6933dcb31f2d649a3f8579e21011d772dca9",
+    "nodes_sha256": "502ef4e7f1a8383e89d759b056524e8bcc16fe6950965f972d13f44411430f17",
+    "records_validated": 18,
+    "resolution_artifact": "taxonomy_resolution.tsv",
+    "resolver_version": "0.1.0",
+    "retrieved_at": "2026-08-13T08:23:00Z",
+    "snapshot": "new_taxdump_2026-08-01",
+    "source": "ncbi-taxdump",
+    "source_url": "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump_archive/new_taxdump_2026-08-01.zip",
+    "status": "validated"
+  },
+  "tree_plan": {
+    "bnni": true,
+    "mode": "accurate",
+    "model": "MFP",
+    "preserve_unrooted": true,
+    "rooting": "outgroup",
+    "seed": 20260813,
+    "sh_alrt": 1000,
+    "support_is_repeatability_not_correctness": true,
+    "support_method": "ultrafast",
+    "support_replicates": 1000,
+    "threads": 8,
+    "tool": "iqtree2",
+    "tree_claim": "gene-tree"
+  },
+  "trimming_plan": {
+    "approval_required_before_tree": true,
+    "compare_topologies": true,
+    "enabled": true,
+    "min_retained_fraction": 0.3,
+    "preserve_raw_alignment": true,
+    "primary_profile": "balanced",
+    "profiles": [
+      {
+        "gap_threshold": 0.1,
+        "id": "permissive"
+      },
+      {
+        "gap_threshold": 0.5,
+        "id": "balanced"
+      },
+      {
+        "gap_threshold": 0.9,
+        "id": "strict"
+      }
+    ],
+    "tool": "trimal"
+  },
+  "warnings": [
+    "No network request or external executable was run.",
+    "Similarity alone does not establish orthology.",
+    "A supported gene-tree topology is not automatically a species tree.",
+    "Choose a nearby homologous sister-lineage outgroup; never choose the most distant hit automatically.",
+    "One or more candidates lack a recorded taxonomic lineage.",
+    "Extreme trimAl profiles are sensitivity analyses, not automatic defaults: permissive."
+  ]
+}

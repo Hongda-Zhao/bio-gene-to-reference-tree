@@ -1,0 +1,5 @@
+alignment_id	path	sequences	columns	retained_vs_raw	mean_occupancy	min_occupancy	max_occupancy	invariant_columns	parsimony_informative_columns
+raw	alignment/alignment.raw.faa	18	2179	1.000000	0.830860	0.055556	1.000000	295	1464
+permissive	alignment/alignment.trimmed.permissive.faa	18	2046	0.938963	0.881259	0.111111	1.000000	162	1464
+balanced	alignment/alignment.trimmed.balanced.faa	18	1851	0.849472	0.944474	0.500000	1.000000	133	1418
+strict	alignment/alignment.trimmed.strict.faa	18	1477	0.677834	0.983412	0.944444	1.000000	128	1122

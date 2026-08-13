@@ -1,0 +1,5 @@
+comparison_id	reference_tree	profile_tree	n_tips	rf_distance	rf_maximum	rf_normalized	topology_identical	outgroup_isolating_split	root_screen_status	interpretation
+primary	exploratory-tree/balanced.fasttree.nwk	exploratory-tree/balanced.fasttree.nwk	18	0	30	0.000000	true	true	pass	distance 0: identical unrooted topology (self-check)
+raw	exploratory-tree/balanced.fasttree.nwk	exploratory-tree/raw.fasttree.nwk	18	2	30	0.066667	false	true	pass	distance > 0: unrooted topology differs
+permissive	exploratory-tree/balanced.fasttree.nwk	exploratory-tree/permissive.fasttree.nwk	18	2	30	0.066667	false	true	pass	distance > 0: unrooted topology differs
+strict	exploratory-tree/balanced.fasttree.nwk	exploratory-tree/strict.fasttree.nwk	18	0	30	0.000000	true	true	pass	distance 0: identical unrooted topology

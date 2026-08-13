@@ -1,0 +1,5 @@
+approved_at_utc	2026-08-13T09:07:46Z
+run_id	gtr-51d4906dff86327a
+plan_hash	8b03bd3fae2882a07351fc83f1b8879ee616ed61f60570d029c5ef8471f65da8
+reference_set_sha256	cea86b4416bcde376e6d8177a2b51d5cd2a501e458af6da9405e9acd6ed69dd8
+decision	approved after exact-taxonomy, NCBI-orthology, BLAST-union-coverage, and Pfam+SMART terminal-domain QC
