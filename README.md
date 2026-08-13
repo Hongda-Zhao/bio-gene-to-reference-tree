@@ -1,21 +1,40 @@
-# bio-gene-to-reference-tree
+# Gene-to-Reference Tree
 
-An open, portable Agent Skill for building an auditable protein gene-tree workflow from query resolution through reference curation, alignment, inference, iTOL annotation, and literature context.
+[![skills.sh installs](https://skills.sh/b/hongda-zhao/bio-gene-to-reference-tree)](https://skills.sh/hongda-zhao/bio-gene-to-reference-tree/bio-gene-to-reference-tree)
+[![Validation](https://github.com/Hongda-Zhao/bio-gene-to-reference-tree/actions/workflows/validate.yml/badge.svg)](https://github.com/Hongda-Zhao/bio-gene-to-reference-tree/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Status: v0.2 review candidate.** The Agent Skill specifies the complete workflow. Its bundled standard-library Python helper is deliberately offline and deterministic: it validates a resolved local protein/candidate bundle, selects references, emits iTOL roles and metadata, and compiles unexecuted MMseqs2/MAFFT/trimAl/FastTree/IQ-TREE2 plans. Live database access, literature retrieval, and external-tool execution use separately authorized capabilities supplied by the host agent or local environment.
+**Build the reference set before you build the tree.**
 
-## Install and use
+An open, portable Agent Skill for taking a protein accession, amino-acid sequence, or protein/gene name plus organism through query resolution, reference and outgroup curation, MAFFT/trimAl, FastTree or IQ-TREE2, iTOL annotation, and current-literature comparison.
 
-Install globally for Codex:
+Unlike a “top N BLAST hits → alignment → tree” recipe, it keeps paralogs, fragments, isoforms, domain-only matches, redundant taxa, outgroups, thresholds, exclusions, and approval decisions visible in an auditable handoff.
+
+## At a glance
+
+- **Start with:** a protein accession, a raw amino-acid sequence, or a protein/gene name plus organism.
+- **Make explicit:** query identity, biological objective, candidate provenance, ortholog/paralog policy, taxonomic sampling, and outgroup rationale.
+- **Review before inference:** selected and rejected references, raw-alignment QC, trimming sensitivity, rooting, model, and support semantics.
+- **Leave an audit trail:** stable reason codes, hashes, exact argument arrays, iTOL annotations, complete sequence metadata, and a literature-evidence plan.
+- **Use across agents:** the installable directory follows the open [Agent Skills specification](https://agentskills.io/specification) and contains no vendor-specific workflow instructions.
+
+## Quick start
+
+Browse the rendered Skill on [skills.sh](https://skills.sh/hongda-zhao/bio-gene-to-reference-tree/bio-gene-to-reference-tree), or install it interactively for any supported agent:
 
 ```bash
 npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
-  --skill bio-gene-to-reference-tree --agent codex --global
+  --skill bio-gene-to-reference-tree
 ```
 
-Install globally for Claude Code:
+For an explicit global installation:
 
 ```bash
+# Codex
+npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
+  --skill bio-gene-to-reference-tree --agent codex --global
+
+# Claude Code
 npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
   --skill bio-gene-to-reference-tree --agent claude-code --global
 ```
@@ -29,13 +48,28 @@ Invoke it directly:
 
 An agent may also load the skill automatically for requests about resolving protein accessions or sequences, selecting phylogenetic references and outgroups, aligning and trimming proteins, inferring a FastTree/IQ-TREE tree, or generating iTOL annotations.
 
-The third-party `skills` CLI supports both agents and reports anonymous installation telemetry by default. Set `DISABLE_TELEMETRY=1` when running it if you do not want an installation counted. To install manually, copy `skills/bio-gene-to-reference-tree/` to `~/.agents/skills/` for Codex or `~/.claude/skills/` for Claude Code.
+To inspect the deterministic core without database access or bioinformatics executables, run the [offline review example](#run-the-offline-review-example).
+
+The third-party `skills` CLI supports both agents and reports anonymous installation telemetry by default. Set `DISABLE_TELEMETRY=1` when running it if you do not want an installation counted. To install manually, copy `skills/bio-gene-to-reference-tree/` to `~/.codex/skills/bio-gene-to-reference-tree/` for Codex or `~/.claude/skills/bio-gene-to-reference-tree/` for Claude Code. For a repository-local installation shared by compatible agents, use `.agents/skills/bio-gene-to-reference-tree/`.
 
 ## Why this project exists
 
 Most bioinformatics skills cover one stage—fetching sequences, running BLAST, retrieving orthologs, aligning proteins, or inferring a tree. The difficult scientific handoffs remain exposed. A naive “take the top BLAST hits and build a tree” pipeline can mix paralogs, fragments, isoforms, domain-only matches, taxonomically redundant records, and an excessively distant outgroup.
 
 This skill makes every inclusion, exclusion, threshold, role, command, and approval visible. It reports a **gene tree**, never automatically a species tree.
+
+| Decision point | Common shortcut | This skill retains |
+|---|---|---|
+| Query identity | Trust a label or unversioned hit | Authoritative namespace, accession version, organism/TaxID, source release, retrieval time, and sequence SHA-256 |
+| Reference curation | Keep the highest-scoring hits | Full candidate pool, orthology evidence, coverage/domain checks, balanced sampling, and deterministic rejection reasons |
+| Outgroup and rooting | Choose the most distant hit or midpoint-root automatically | Candidate rationales, taxonomic evidence, unrooted tree, and a separately approved rooted copy |
+| Alignment and trimming | Use one opaque preset | Raw MSA, QC metrics, every trim profile, retained-column fractions, and topology sensitivity |
+| Inference | Report “bootstrap” without its method | Exact model/support method, seed, tool version, argument array, and support semantics |
+| Interpretation | Put all meaning in tip labels | iTOL role files, complete metadata TSV, current literature/taxonomy evidence, conflicts, and limitations |
+
+## Execution boundary
+
+> **Status: v0.2 review candidate.** The Agent Skill specifies the complete workflow. Its bundled standard-library Python helper is deliberately offline and deterministic: it validates a resolved local protein/candidate bundle, selects references, emits iTOL roles and metadata, and compiles unexecuted MMseqs2/MAFFT/trimAl/FastTree/IQ-TREE2 plans. Live database access, literature retrieval, and external-tool execution use separately authorized capabilities supplied by the host agent or local environment.
 
 ## Workflow
 
@@ -87,9 +121,10 @@ skills/bio-gene-to-reference-tree/
   references/
   assets/
 tests/
+.github/workflows/validate.yml
 ```
 
-The installable directory follows the open [Agent Skills specification](https://agentskills.io/specification). Vendor-specific behavior is not embedded in `SKILL.md`, so the same directory works with Codex, Claude Code, and other compatible clients. `agents/openai.yaml` is optional Codex presentation metadata and does not change the workflow.
+The installable directory follows the open [Agent Skills specification](https://agentskills.io/specification). Vendor-specific behavior is not embedded in `SKILL.md`, so the same directory works with Codex, Claude Code, and other compatible clients. `agents/openai.yaml` is optional Codex presentation metadata and does not change the workflow. Repository-level tests enforce the portable frontmatter, local resource links, progressive-disclosure limits, schemas, and deterministic workflow contract.
 
 ## Run the offline review example
 

@@ -17,6 +17,8 @@ Build a protein gene tree through explicit, reviewable decisions. Treat database
 
 ## Run the workflow
 
+Read [workflow.md](references/workflow.md) before the first run. Revisit it whenever a state transition, approval gate, invalidated hash, or failure condition affects what may run next.
+
 ### 1. Classify and resolve the query
 
 Classify the input as:
@@ -80,7 +82,7 @@ Use MAFFT and choose the mode from sequence count and architecture, not divergen
 - G-INS-i for globally alignable full-length proteins;
 - E-INS-i for conserved motifs separated by long insertions, when motif order is shared.
 
-Inspect coverage, gap fraction, occupancy, conserved motifs, mixed domains, fragments, fusions, duplicate tip IDs, and suspicious long branches. Preserve `alignment.raw.faa`. Read [alignment-and-tree.md](references/alignment-and-tree.md) before trimming or inference.
+Inspect coverage, gap fraction, occupancy, conserved motifs, mixed domains, fragments, fusions, duplicate tip IDs, and suspicious long branches. Preserve `alignment.raw.faa`. Read [alignment-and-tree.md](references/alignment-and-tree.md) before choosing or running MAFFT, trimAl, FastTree, or IQ-TREE2.
 
 ### 7. Treat trimming as a sensitivity analysis
 
@@ -105,7 +107,7 @@ Generate an official `DATASET_COLORSTRIP` file by default:
 - `expanded`: green `#009E73`;
 - `outgroup`: gray `#999999`.
 
-Generate `DATASET_RANGE` only after the final topology shows that a requested group is a meaningful contiguous clade; do not use a range to imply monophyly. Keep full evolutionary metadata in TSV rather than overloading tree labels. Read [itol-and-literature.md](references/itol-and-literature.md).
+Generate `DATASET_RANGE` only after the final topology shows that a requested group is a meaningful contiguous clade; do not use a range to imply monophyly. Keep full evolutionary metadata in TSV rather than overloading tree labels. Read [itol-and-literature.md](references/itol-and-literature.md) before generating iTOL/metadata outputs or beginning the literature comparison.
 
 ### 10. Compare with current phylogenetic evidence
 
@@ -115,6 +117,8 @@ Record DOI/PMID, year, taxon coverage, data type, inference method/model, topolo
 
 ## Compile the deterministic review bundle
 
+Read [output-contract.md](references/output-contract.md) before creating a request, running the planner, interpreting its review bundle, or assembling the final executed report.
+
 After an authorized host agent has materialized a resolved protein and candidate TSV/FASTA bundle, locate this `SKILL.md`, treat its directory as the skill root, and run:
 
 ```text
@@ -122,7 +126,7 @@ python3 <skill-root>/scripts/gene_to_tree.py plan \
   --request <request.json> --offline --dry-run --out <new-output-directory>
 ```
 
-Review `selected_references.tsv`, `rejected_references.tsv`, `reference_set.faa`, `sequence_metadata.tsv`, `itol_roles.txt`, `plan.json`, and `manifest.json`. Interpret them with [output-contract.md](references/output-contract.md). The helper launches no network request or external executable in plan mode, refuses overwrite, stores commands as argument arrays, and invalidates approval when a decision-bearing input changes.
+Review `selected_references.tsv`, `rejected_references.tsv`, `reference_set.faa`, `sequence_metadata.tsv`, `itol_roles.txt`, `plan.json`, and `manifest.json`. The helper launches no network request or external executable in plan mode, refuses overwrite, stores commands as argument arrays, and invalidates approval when a decision-bearing input changes.
 
 Inspect optional local executables with:
 

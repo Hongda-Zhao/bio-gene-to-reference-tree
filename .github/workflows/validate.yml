@@ -2,6 +2,8 @@ name: validate
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
@@ -27,5 +29,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Compile Python sources
         run: python -m py_compile skills/bio-gene-to-reference-tree/scripts/gene_to_tree.py tests/test_skill_metadata.py tests/test_workflow.py
-      - name: Run offline tests
-        run: python -m unittest discover -s tests -v
+      - name: Validate the Agent Skill package
+        run: python -m unittest discover -s tests -p "test_skill_metadata.py" -v
+      - name: Run offline workflow contract tests
+        run: python -m unittest discover -s tests -p "test_workflow.py" -v
