@@ -70,7 +70,10 @@ class Brca1ExpandedPreparationTests(unittest.TestCase):
             completed = self.run_helper(directory)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             output = directory / "output"
-            self.assertEqual((output / "candidates.faa").read_text().count(">"), 3)
+            self.assertEqual(
+                (output / "candidates.faa").read_text(encoding="utf-8").count(">"),
+                3,
+            )
             with (output / "candidates.pre-qc.tsv").open(encoding="utf-8", newline="") as handle:
                 candidates = list(csv.DictReader(handle, delimiter="\t"))
             self.assertEqual([row["accession"] for row in candidates], [
@@ -81,7 +84,9 @@ class Brca1ExpandedPreparationTests(unittest.TestCase):
             with (output / "provider_species_inventory.tsv").open(encoding="utf-8", newline="") as handle:
                 inventory = list(csv.DictReader(handle, delimiter="\t"))
             self.assertEqual(len(inventory), 3)
-            summary = json.loads((output / "provider_scope_summary.json").read_text())
+            summary = json.loads(
+                (output / "provider_scope_summary.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(summary["provider_gene_record_count"], 3)
             self.assertEqual(summary["provider_protein_record_count"], 3)
             self.assertEqual(summary["selected_tip_count"], 3)
@@ -160,7 +165,16 @@ class Brca1ExpandedPreparationTests(unittest.TestCase):
             [row["accession"] for row in candidates],
             [row["accession"] for row in rows],
         )
-        self.assertEqual(sum(1 for line in (example / "candidates.faa").read_text().splitlines() if line.startswith(">")), 50)
+        self.assertEqual(
+            sum(
+                1
+                for line in (example / "candidates.faa")
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.startswith(">")
+            ),
+            50,
+        )
 
     def test_committed_provider_inventory_and_declared_gaps_are_honest(self) -> None:
         example = ROOT / "examples" / "brca1-expanded" / "inputs"
@@ -392,7 +406,10 @@ class Brca1ExpandedPreparationTests(unittest.TestCase):
         self.assertEqual(listed_files, expected_files)
 
         for markdown in example.rglob("*.md"):
-            for destination in re.findall(r"\[[^]]+\]\(([^)]+)\)", markdown.read_text()):
+            for destination in re.findall(
+                r"\[[^]]+\]\(([^)]+)\)",
+                markdown.read_text(encoding="utf-8"),
+            ):
                 if destination.startswith(("http://", "https://", "mailto:", "#")):
                     continue
                 local = destination.split("#", 1)[0]
