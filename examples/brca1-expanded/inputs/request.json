@@ -1,0 +1,122 @@
+{
+  "schema_version": "0.2",
+  "project_id": "brca1-amniote-expanded-reference-review",
+  "objective": "ortholog-tree",
+  "sequence_context": "cellular",
+  "query": {
+    "kind": "protein-fasta",
+    "path": "query.faa",
+    "id": "NP_009225.1",
+    "original_value": "NP_009225.1",
+    "organism": "Homo sapiens",
+    "taxon_id": "9606",
+    "gene_name": "BRCA1",
+    "protein_name": "BRCA1 DNA repair associated, isoform 1",
+    "source_db": "NCBI RefSeq",
+    "source_release": "GCF_000001405.40-RS_2025_08",
+    "retrieved_at": "2026-08-13"
+  },
+  "taxon_scope": {
+    "ingroup": "Amniota: balanced mammals, birds, crocodilians, turtles, and lepidosaurs",
+    "outgroup": "Amphibia: two anurans, two caudates, and one caecilian retained as candidates"
+  },
+  "privacy": {
+    "remote_search_allowed": true,
+    "unpublished_sequence": false
+  },
+  "references": {
+    "strategy": "ortholog-first",
+    "candidate_table": "candidates.tsv",
+    "candidate_fasta": "candidates.faa",
+    "discovery_tiers": [
+      "NCBI Orthologs gene group 672",
+      "NCBI RefSeq protein",
+      "terminal-domain architecture review"
+    ]
+  },
+  "selection": {
+    "min_query_coverage": 0.1,
+    "min_target_coverage": 0.1,
+    "min_length_ratio": 0.75,
+    "max_length_ratio": 1.1,
+    "max_per_taxon": 1,
+    "max_references": 49,
+    "min_ingroup_taxa": 44,
+    "require_outgroup": true,
+    "outgroup_count": 5,
+    "allow_paralogs": false
+  },
+  "clustering": {
+    "mode": "auto",
+    "tool": "mmseqs2",
+    "trigger_min_sequences": 200,
+    "algorithm": "easy-linclust",
+    "min_seq_id": 0.95,
+    "coverage": 0.8,
+    "coverage_mode": 0,
+    "threads": 8,
+    "preserve_analysis_groups": ["study", "outgroup"]
+  },
+  "alignment": {
+    "tool": "mafft",
+    "mode": "einsi",
+    "threads": 8
+  },
+  "trimming": {
+    "enabled": true,
+    "tool": "trimal",
+    "primary_profile": "balanced",
+    "profiles": [
+      {"id": "permissive", "gap_threshold": 0.1},
+      {"id": "balanced", "gap_threshold": 0.5},
+      {"id": "strict", "gap_threshold": 0.9}
+    ],
+    "min_retained_fraction": 0.3,
+    "compare_topologies": true
+  },
+  "tree": {
+    "mode": "accurate",
+    "tool": "iqtree2",
+    "model": "MFP",
+    "support": {
+      "method": "ultrafast",
+      "replicates": 1000,
+      "sh_alrt": 1000,
+      "bnni": true
+    },
+    "threads": 8,
+    "seed": 20260814,
+    "rooting": "outgroup"
+  },
+  "taxonomy": {
+    "enabled": true,
+    "source": "ncbi-taxdump",
+    "match_mode": "exact-scientific-name",
+    "names_dmp": "taxonomy/names.dmp",
+    "nodes_dmp": "taxonomy/nodes.dmp",
+    "snapshot": "new_taxdump_2026-08-01",
+    "source_url": "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump_archive/new_taxdump_2026-08-01.zip",
+    "retrieved_at": "2026-08-13T08:23:00Z"
+  },
+  "itol": {
+    "enabled": true,
+    "dataset_label": "BRCA1 expanded sequence roles",
+    "colors": {
+      "study": "#E69F00",
+      "expanded": "#009E73",
+      "outgroup": "#999999"
+    },
+    "generate_ranges_after_tree_qc": false
+  },
+  "literature": {
+    "enabled": true,
+    "years_back": 10,
+    "include_foundational": true,
+    "taxon_fallback_ranks": ["species", "genus", "family", "order", "class"],
+    "sources": [
+      "primary phylogenomic literature",
+      "NCBI Orthologs methodology",
+      "NCBI Taxonomy"
+    ]
+  }
+}

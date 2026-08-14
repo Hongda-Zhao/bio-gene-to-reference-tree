@@ -1,0 +1,7 @@
+690f91d44710a6f9024c93d3ee4404d022f15f8bad65ae91ed14cf136d28e21f  examples/brca1-expanded/qc/rejected-attempt/blastp-human-vs-candidates.tsv
+02f1f5541203de6e434d2ef38eb91f88e77161e2ece23badae28a7e1e36ef0b2  examples/brca1-expanded/qc/rejected-attempt/candidates.faa
+73d75d83fa32de98e6bf93a22d5c97eb1ff213121c4a7aaf783a115d47c7c3c0  examples/brca1-expanded/qc/rejected-attempt/candidates.pre-qc.tsv
+bfe4eefb53448ab517ca0d4a2081fb1c129087b2ad3bcd95d99173d22ebe7fc4  examples/brca1-expanded/qc/rejected-attempt/interproscan-pfam-smart.tsv
+ef86d20031f519df3b0c9878e77c5755ba8ce0a5964e7b3a0ac26d0c8bddd3b5  examples/brca1-expanded/inputs/query.faa
+81746ff7385ef9b352fd21083d0f06a2f4da62494e56d0b7a9d63348c017b836  examples/brca1-expanded/qc/rejected-attempt/selection_manifest.tsv
+c92d3947b4256bfbb90e7846b670ed61f84993b91c8ae900cf0238f11941444a  examples/brca1-expanded/qc/rejected-attempt/software_versions.tsv

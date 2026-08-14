@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+#PBS -N brca1_taxonomy
+#PBS -S /bin/bash
+#PBS -q SMALL
+#PBS -l select=1:ncpus=1:mem=4gb
+#PBS -l walltime=01:00:00
+#PBS -j oe
+
+# Resolve every proposed tip against one frozen NCBI new_taxdump snapshot.
+# Submit with:
+#   qsub -v BRCA1_RUN_DIR=/absolute/run,TAXDUMP_DIR=/absolute/taxdump \
+#     run_taxonomy_resolution.pbs
+
+set -euo pipefail
+IFS=$'\n\t'
+umask 027
+
+: "${BRCA1_RUN_DIR:?set BRCA1_RUN_DIR to the expanded BRCA1 run directory}"
+: "${TAXDUMP_DIR:?set TAXDUMP_DIR to the extracted frozen new_taxdump directory}"
+
+for directory in "${BRCA1_RUN_DIR}" "${TAXDUMP_DIR}"; do
+  if [[ "${directory}" != /* || ! -d "${directory}" ]]; then
+    printf 'Expected an existing absolute directory: %s\n' "${directory}" >&2
+    exit 2
+  fi
+done
+
+INPUT="${BRCA1_RUN_DIR}/inputs/candidates.pre-qc.tsv"
+NAMES="${TAXDUMP_DIR}/names.dmp"
+NODES="${TAXDUMP_DIR}/nodes.dmp"
+OUTPUT="${BRCA1_RUN_DIR}/annotation/taxonomy_resolution.tsv"
+RESOLVER="${BRCA1_RUN_DIR}/scripts/ncbi_taxonomy.py"
+LOG_DIR="${BRCA1_RUN_DIR}/pbs-logs"
+
+for required in "${INPUT}" "${NAMES}" "${NODES}" "${RESOLVER}"; do
+  if [[ ! -s "${required}" ]]; then
+    printf 'Required non-empty input is missing: %s\n' "${required}" >&2
+    exit 2
+  fi
+done
+
+mkdir -p -- "${LOG_DIR}" "${BRCA1_RUN_DIR}/annotation"
+DIRECT_LOG="${LOG_DIR}/taxonomy-resolution.${PBS_JOBID:-manual}.log"
+if [[ -e "${DIRECT_LOG}" || -e "${OUTPUT}" ]]; then
+  printf 'Refusing to overwrite an existing taxonomy output or log.\n' >&2
+  exit 2
+fi
+exec > "${DIRECT_LOG}" 2>&1
+
+printf '%s  %s\n' \
+  'c3aac85da1bf473792e95bf8fe2d6933dcb31f2d649a3f8579e21011d772dca9' \
+  "${NAMES}" | sha256sum -c -
+printf '%s  %s\n' \
+  '502ef4e7f1a8383e89d759b056524e8bcc16fe6950965f972d13f44411430f17' \
+  "${NODES}" | sha256sum -c -
+
+if [[ -r /usr/appli/freeware/Modules/init/bash ]]; then
+  # shellcheck source=/dev/null
+  source /usr/appli/freeware/Modules/init/bash
+elif [[ -r /etc/profile.d/modules.sh ]]; then
+  # shellcheck source=/dev/null
+  source /etc/profile.d/modules.sh
+fi
+module purge
+module load Python/3.11.7
+
+python3 "${RESOLVER}" \
+  --names "${NAMES}" \
+  --nodes "${NODES}" \
+  --snapshot new_taxdump_2026-08-01 \
+  --source-url https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump_archive/new_taxdump_2026-08-01.zip \
+  --retrieved-at 2026-08-13T08:23:00Z \
+  --input "${INPUT}" \
+  --id-column accession \
+  --name-column species \
+  --taxid-column taxon_id \
+  --out "${OUTPUT}"
+
+printf 'Resolved records: %s\n' "$(( $(wc -l < "${OUTPUT}") - 1 ))"
+sha256sum "${OUTPUT}"

@@ -20,7 +20,7 @@ Unlike a “top N BLAST hits → alignment → tree” recipe, it keeps paralogs
 
 ## Executed example: human BRCA1
 
-![Outgroup-rooted BRCA1 protein gene tree for 18 vertebrates](examples/brca1/figures/gene-tree.outgroup-rooted.ggtree.svg)
+![Outgroup-rooted BRCA1 protein gene tree for 18 vertebrates](examples/brca1/figures/brca1-readme.svg)
 
 The repository includes a real, checksum-linked run starting from human RefSeq
 BRCA1 [`NP_009225.1`](https://www.ncbi.nlm.nih.gov/protein/NP_009225.1). It
@@ -68,8 +68,8 @@ tree was run. The amphibian root is likewise a conditional display hypothesis,
 not a long-branch-tested biological root.
 
 [View the full executed audit record](examples/brca1/README.md) ·
-[SVG](examples/brca1/figures/gene-tree.outgroup-rooted.ggtree.svg) ·
-[PDF](examples/brca1/figures/gene-tree.outgroup-rooted.ggtree.pdf) ·
+[detailed audit SVG](examples/brca1/figures/gene-tree.outgroup-rooted.ggtree.svg) ·
+[detailed audit PDF](examples/brca1/figures/gene-tree.outgroup-rooted.ggtree.pdf) ·
 [unrooted Newick](examples/brca1/tree/gene-tree.unrooted.nwk) ·
 [rooted derivative](examples/brca1/tree/gene-tree.outgroup-rooted.nwk) ·
 [metadata](examples/brca1/annotation/sequence_metadata.tsv) ·
@@ -77,6 +77,26 @@ not a long-branch-tested biological root.
 [iTOL roles](examples/brca1/annotation/itol_roles.txt) ·
 [execution reconciliation](examples/brca1/report/execution_reconciliation.json) ·
 [checksums](examples/brca1/report/checksums.sha256)
+
+### Expanded BRCA1 reference review: 50 candidates
+
+A separate [expanded review bundle](examples/brca1-expanded/README.md) audits
+the full frozen provider scope (558 genes / 3,605 proteins) and proposes 50
+taxonomically balanced BRCA1 ortholog-group members: 45 amniote ingroup tips
+including human plus five amphibian outgroup candidates. All 50 promoted
+records passed exact scientific-name/TaxID resolution and the declared
+RING-plus-two-BRCT gate. One initial frog model was rejected with its raw
+evidence retained, and five deep-divergence records remain visibly flagged for
+manual alignment/outgroup review.
+
+The expanded bundle is intentionally at `pending-reference-approval`: no
+50-tip alignment or tree has been run. This keeps reference selection separate
+from inference and lets reviewers inspect the
+[manifest](examples/brca1-expanded/inputs/selection_manifest.tsv),
+[QC table](examples/brca1-expanded/qc/candidate_qc.tsv),
+[manual flags](examples/brca1-expanded/qc/manual_review_flags.tsv), and
+[deterministic plan](examples/brca1-expanded/review/plan.json) first. The
+executed 18-tip tree above remains the current homepage result.
 
 Try the same workflow with:
 
