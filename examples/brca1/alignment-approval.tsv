@@ -1,0 +1,11 @@
+approved_at_utc	2026-08-13T09:12:01Z
+profile	balanced
+alignment_sha256	b3ea66343c7b4ad4129459715d5de7fdf2f053d9d1eb8b77a0a5637b5ef84dd6
+sequences	18
+raw_columns	2179
+retained_columns	1851
+retained_fraction	0.849472
+mean_occupancy	0.944474
+parsimony_informative_columns	1418
+max_tip_gap_fraction	0.215019
+review	terminal architectures passed; balanced profile retained 84.95 percent of columns; raw/permissive/balanced FastTree screens agreed on major sampled clades and the amphibian pair; final topology remains subject to IQ-TREE and profile RF review

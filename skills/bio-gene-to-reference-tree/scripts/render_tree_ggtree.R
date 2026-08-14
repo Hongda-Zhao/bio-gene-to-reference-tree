@@ -209,6 +209,26 @@ validate_outgroup_root_split <- function(tree, outgroup_tips) {
   }
 }
 
+structural_root_marker_index <- function(tree) {
+  if (!ape::is.rooted(tree) || is.null(tree$node.label)) {
+    return(NA_integer_)
+  }
+  candidate_roots <- setdiff(unique(tree$edge[, 1L]), unique(tree$edge[, 2L]))
+  if (length(candidate_roots) != 1L) {
+    return(NA_integer_)
+  }
+  label_index <- candidate_roots[[1L]] - length(tree$tip.label)
+  if (
+    label_index < 1L ||
+      label_index > length(tree$node.label) ||
+      is.na(tree$node.label[[label_index]]) ||
+      !identical(tree$node.label[[label_index]], "Root")
+  ) {
+    return(NA_integer_)
+  }
+  as.integer(label_index)
+}
+
 validate_support <- function(tree, support_format) {
   allowed <- c("none", "fasttree-sh-like", "sh-alrt/ufboot", "sh-alrt/bootstrap")
   if (!support_format %in% allowed) {
@@ -218,6 +238,12 @@ validate_support <- function(tree, support_format) {
     return(FALSE)
   }
   labels <- tree$node.label
+  root_marker_index <- structural_root_marker_index(tree)
+  if (!is.na(root_marker_index)) {
+    # postprocess_brca1_tree.R writes this exact marker on the actual
+    # structural root. It records rooting provenance and is not support.
+    labels[[root_marker_index]] <- NA_character_
+  }
   labels <- labels[!is.na(labels) & labels != ""]
   if (length(labels) == 0L) {
     fail("Support display was requested but the tree has no internal-node labels.")
@@ -330,6 +356,11 @@ main <- function() {
   }
   branch_mode <- choose_branch_mode(tree, options$branch_length)
   show_support <- validate_support(tree, options$support_format)
+  root_marker_index <- structural_root_marker_index(tree)
+  if (show_support && !is.na(root_marker_index)) {
+    # Do not draw the rooting-provenance marker as if it were branch support.
+    tree$node.label[[root_marker_index]] <- NA_character_
+  }
   branch_argument <- if (branch_mode == "phylogram") "branch.length" else "none"
   if (length(tree$tip.label) > 150L && show_tip_labels) {
     fail("More than 150 tips require --show-tip-labels false or a deliberately specialized renderer.")
@@ -366,6 +397,18 @@ main <- function() {
     ggplot2::theme(legend.position = "right", plot.caption = ggplot2::element_text(hjust = 0))
   if (show_tip_labels) {
     plot <- plot + ggtree::geom_tiplab(ggplot2::aes(label = display_label), size = 2.5)
+    if (options$layout == "rectangular") {
+      finite_x <- plot$data$x[is.finite(plot$data$x)]
+      if (length(finite_x) > 0L) {
+        x_span <- diff(range(finite_x))
+        if (is.finite(x_span) && x_span > 0) {
+          # Reserve deterministic room for species + accession labels on the
+          # longest tip. Canvas width alone does not expand the data coordinate
+          # range and can still leave long labels clipped at the panel edge.
+          plot <- plot + ggplot2::expand_limits(x = max(finite_x) + 0.30 * x_span)
+        }
+      }
+    }
   }
   if (show_support) {
     plot <- plot + ggtree::geom_text2(

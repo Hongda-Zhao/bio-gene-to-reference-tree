@@ -1,0 +1,9 @@
+decision_status	approved-outgroup-rooted
+outgroup_taxa	NP_001107963.1;XP_029429046.1
+required_profile_screens	raw-fasttree;permissive-fasttree;balanced-fasttree;strict-fasttree
+primary_tree_sha256	5df0dd2067f52c008637d81d944fc532ef2e3b67fa242b5eb40ec74b7d494380
+rooted_tree_created	true
+decision_basis	final IQ-TREE unrooted split plus all declared trimming-profile root screens
+rooted_tree_sha256	8738dfc3e1a18a4d58a200042d644d7557b6806e8be75d2058b805de2f5d5202
+approved_at_utc	2026-08-13T13:17:11Z
+rooting_limitations	Topology-based display hypothesis; no explicit long-branch, outgroup-removal, alternative-outgroup, or richer-model rooting sensitivity was run.

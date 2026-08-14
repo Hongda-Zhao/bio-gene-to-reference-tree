@@ -1,0 +1,21 @@
+{
+  "expanded_count": 44,
+  "externally_verified_provider_archive_sha256": "30f1ef86dbe2989981bed005c837e7538226cae24b800aef44a32a589bfe04c0",
+  "length_ratio_gate": [
+    0.75,
+    1.1
+  ],
+  "outgroup_candidate_count": 5,
+  "provider_data_report_sha256": "6bcfcbc9bf3764ae34180db6c7b4da48f9f7a9690cd118d8d6f66417b0264937",
+  "provider_gene_record_count": 558,
+  "provider_protein_fasta_sha256": "9d9dd5f58be9c1dcfeb32b0e613746caf262c77090bdd2e477819d7806f72080",
+  "provider_protein_record_count": 3605,
+  "rejected_candidate_count": 1,
+  "rejected_candidates_sha256": "18fc80af7028f51e042a06a086e4c116ebed5f3b68712ba76ea151e6efba24f3",
+  "schema_version": "0.2",
+  "selected_tip_count": 50,
+  "selection_manifest_sha256": "66f908a51261bfdb6feedadde0f5b9a0af722a94f08bf8e7d0d9189c6eaa93b1",
+  "status": "reference-review-candidate",
+  "study_count": 1,
+  "unique_selected_taxon_count": 50
+}

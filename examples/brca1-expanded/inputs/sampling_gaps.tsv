@@ -1,0 +1,4 @@
+taxon_id	species	clade	provider_status	provider_protein_count	maximum_sequence_length	maximum_length_ratio	gap_status	evidence_note
+9258	Ornithorhynchus anatinus	Monotremata	present	2	1346	0.722491	no_sequence_within_length_gate	Both frozen NCBI Ortholog package models are below the declared 0.75 query-length ratio; no terminal-domain failure is asserted.
+9261	Tachyglossus aculeatus	Monotremata	present	1	1370	0.735373	no_sequence_within_length_gate	The frozen NCBI Ortholog package model is below the declared 0.75 query-length ratio; no terminal-domain failure is asserted.
+8508	Sphenodon punctatus	Rhynchocephalia	absent	0			no_record_in_frozen_provider_package	The exact scientific-name TaxID exists in the frozen taxonomy snapshot, but the 558-gene NCBI Ortholog package contains no matching gene or protein record.

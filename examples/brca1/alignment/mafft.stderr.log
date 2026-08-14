@@ -1,0 +1,66 @@
+outputhat23=16
+treein = 0
+compacttree = 0
+stacksize: -1 kb
+rescale = 1
+All-to-all alignment.
+    0 / 18 (by thread   0)    10 / 18 (by thread   6) tbfast-pair (aa) Version 7.526
+alg=N, model=BLOSUM62, 2.00, -0.00, -0.00, noshift, amax=0.0
+8 thread(s)
+
+outputhat23=16
+Loading 'hat3.seed' ... 
+done.
+Writing hat3 for iterative refinement
+rescale = 1
+Gap Penalty = -1.53, +0.00, +0.00
+tbutree = 1, compacttree = 0
+Constructing a UPGMA tree ... 
+    0 / 18   10 / 18
+done.
+
+Progressive alignment ... 
+STEP     1 /17 (thread    1) STEP     2 /17 (thread    0) STEP     8 /17 (thread    6) STEP     9 /17 (thread    1) STEP     3 /17 (thread    3) STEP    11 /17 (thread    0) STEP    13 /17 (thread    3) STEP     4 /17 (thread    4) STEP     5 /17 (thread    2) STEP     6 /17 (thread    7) STEP     7 /17 (thread    5) STEP    10 /17 (thread    6) STEP    12 /17 (thread    1) 
+Reallocating (by thread 0) ..done. *alloclen = 4862
+STEP    14 /17 (thread    0) STEP    15 /17 (thread    3) STEP    16 /17 (thread    4) STEP    17 /17 (thread    2) 
+done.
+tbfast (aa) Version 7.526
+alg=A, model=BLOSUM62, 1.53, -0.00, -0.00, noshift, amax=0.0
+8 thread(s)
+
+minimumweight = 0.000010
+autosubalignment = 0.000000
+nthread = 8
+randomseed = 0
+blosum 62 / kimura 200
+poffset = 0
+niter = 16
+sueff_global = 0.100000
+nadd = 16
+Loading 'hat3' ... done.
+rescale = 1
+
+    0 / 18   10 / 18
+Segment   1/  1    1-2202
+001-0000-1 (thread    3) identical     001-0001-1 (thread    5) identical     001-0002-1 (thread    7) identical     001-0002-1 (thread    7) better     001-0003-1 (thread    5) identical     001-0004-1 (thread    1) identical     001-0005-1 (thread    5) identical     001-0005-1 (thread    5) worse      001-0006-0 (thread    7) identical     001-0007-0 (thread    4) identical     001-0008-0 (thread    3) identical     001-0009-1 (thread    5) identical     001-0009-0 (thread    2) identical     001-0011-0 (thread    8) identical     001-0011-0 (thread    8) better     001-0012-0 (thread    6) identical     001-0013-0 (thread    7) identical     001-0013-0 (thread    7) worse      001-0014-1 (thread    4) identical     001-0014-1 (thread    4) worse      001-0015-1 (thread    8) identical     001-0015-1 (thread    8) worse      001-0016-0 (thread    1) identical     001-0017-1 (thread    5) identical     001-0017-1 (thread    5) better     001-0018-1 (thread    8) identical     001-0018-1 (thread    8) better     001-0019-0 (thread    3) identical     001-0019-0 (thread    3) better     001-0020-0 (thread    6) identical     001-0020-0 (thread    6) better     001-0021-1 (thread    7) identical     001-0021-1 (thread    7) better     001-0022-0 (thread    2) identical     001-0022-0 (thread    2) worse      001-0023-0 (thread    1) identical     001-0023-0 (thread    1) better     001-0024-1 (thread    3) identical     001-0024-1 (thread    3) worse      001-0025-0 (thread    8) identical     001-0025-0 (thread    8) better     001-0026-1 (thread    5) identical     001-0026-1 (thread    5) better     001-0027-1 (thread    3) identical     001-0027-1 (thread    3) better     001-0028-1 (thread    7) identical     001-0028-1 (thread    7) better     001-0029-0 (thread    2) identical     001-0029-0 (thread    2) worse      001-0030-0 (thread    6) identical     001-0030-0 (thread    6) better     001-0031-1 (thread    1) identical     001-0031-1 (thread    1) better     001-0032-0 (thread    4) identical     001-0032-0 (thread    4) better     002-0000-0 (thread    8) identical     002-0001-1 (thread    5) identical     002-0002-1 (thread    7) identical     002-0003-1 (thread    4) identical     002-0004-0 (thread    3) identical     002-0004-0 (thread    3) better     002-0005-0 (thread    2) identical     002-0006-1 (thread    6) identical     002-0007-0 (thread    1) identical     002-0008-1 (thread    5) identical     002-0009-1 (thread    4) identical     002-0009-1 (thread    4) worse      002-0010-0 (thread    8) identical     002-0011-0 (thread    3) identical     002-0011-1 (thread    2) identical     002-0013-0 (thread    7) identical     002-0014-0 (thread    6) identical     002-0014-1 (thread    1) identical     002-0014-0 (thread    6) better     002-0015-1 (thread    1) better     002-0016-1 (thread    1) identical     002-0016-1 (thread    1) better     002-0017-0 (thread    5) identical     002-0017-0 (thread    5) better     002-0018-1 (thread    4) identical     002-0018-1 (thread    4) better     002-0019-1 (thread    3) identical     002-0019-1 (thread    3) worse      002-0020-0 (thread    2) identical     002-0020-0 (thread    2) better     002-0021-1 (thread    7) identical     002-0022-1 (thread    3) identical     002-0022-1 (thread    3) better     002-0023-0 (thread    8) identical     002-0023-0 (thread    8) better     002-0024-1 (thread    5) identical     002-0024-0 (thread    1) identical     002-0024-1 (thread    5) better     002-0025-0 (thread    1) better     002-0026-1 (thread    5) identical     002-0026-1 (thread    5) better     002-0027-0 (thread    4) identical     002-0027-0 (thread    4) worse      002-0028-0 (thread    3) identical     002-0028-1 (thread    7) identical     002-0028-0 (thread    3) worse      002-0029-1 (thread    7) better     002-0030-1 (thread    8) identical     002-0030-1 (thread    8) worse      002-0031-0 (thread    6) identical     002-0031-0 (thread    6) worse      002-0032-0 (thread    2) identical     002-0032-0 (thread    2) worse      003-0000-0 (thread    1) identical     003-0001-1 (thread    5) identical     003-0002-1 (thread    3) identical     003-0003-1 (thread    2) identical     003-0003-1 (thread    2) better     003-0004-1 (thread    2) identical     003-0004-0 (thread    4) identical     003-0004-1 (thread    2) worse      003-0005-0 (thread    4) better     003-0006-1 (thread    5) identical     003-0007-0 (thread    7) identical     003-0008-1 (thread    8) identical     003-0009-1 (thread    4) identical     003-0010-0 (thread    6) identical     003-0011-0 (thread    1) identical     003-0012-0 (thread    3) identical     003-0013-1 (thread    7) identical     003-0014-0 (thread    5) identical     003-0014-0 (thread    8) identical     003-0014-0 (thread    5) better     003-0015-0 (thread    8) worse      003-0016-1 (thread    4) identical     003-0016-1 (thread    4) worse      003-0016-1 (thread    8) identical     003-0017-1 (thread    1) identical     003-0018-1 (thread    1) better     003-0019-0 (thread    2) identical     003-0020-1 (thread    7) identical     003-0021-0 (thread    3) identical     003-0021-0 (thread    3) better     003-0022-0 (thread    6) identical     003-0023-1 (thread    2) identical     003-0024-0 (thread    1) identical     003-0024-0 (thread    1) worse      003-0025-0 (thread    4) identical     003-0025-0 (thread    4) worse      003-0026-1 (thread    8) identical     003-0026-1 (thread    8) better     003-0027-1 (thread    3) identical     003-0027-1 (thread    3) worse      003-0028-0 (thread    7) identical     003-0028-0 (thread    7) worse      003-0029-1 (thread    1) identical     003-0029-1 (thread    1) worse      003-0030-0 (thread    5) identical     003-0030-0 (thread    5) worse      003-0031-0 (thread    6) identical     003-0031-0 (thread    6) worse      003-0032-1 (thread    2) identical     003-0032-1 (thread    2) worse      004-0000-1 (thread    8) identical     004-0001-0 (thread    4) identical     004-0002-1 (thread    7) identical     004-0003-1 (thread    2) identical     004-0004-0 (thread    3) identical     004-0005-0 (thread    1) identical     004-0006-1 (thread    5) identical     004-0007-0 (thread    6) identical     004-0008-1 (thread    4) identical     004-0009-1 (thread    2) identical     004-0009-1 (thread    2) worse      004-0010-1 (thread    1) identical     004-0011-0 (thread    8) identical     004-0012-1 (thread    6) identical     004-0012-1 (thread    6) better     004-0013-0 (thread    4) identical     004-0013-0 (thread    4) worse      004-0014-0 (thread    5) identical     004-0014-0 (thread    5) better     004-0015-0 (thread    7) identical     004-0016-1 (thread    2) identical     004-0016-1 (thread    2) better     004-0017-1 (thread    8) identical     004-0017-1 (thread    8) better     004-0018-1 (thread    7) identical     004-0019-0 (thread    3) identical     004-0020-1 (thread    4) identical     004-0021-0 (thread    6) identical     004-0021-0 (thread    6) better     004-0022-0 (thread    1) identical     004-0023-0 (thread    2) identical     004-0023-0 (thread    2) worse      004-0024-0 (thread    7) identical     004-0024-1 (thread    3) identical     004-0024-1 (thread    3) worse      004-0025-0 (thread    7) worse      004-0026-1 (thread    8) identical     004-0027-1 (thread    6) identical     004-0027-1 (thread    6) better     004-0028-0 (thread    4) identical     004-0028-0 (thread    4) worse      004-0029-1 (thread    3) identical     004-0029-1 (thread    3) worse      004-0030-0 (thread    5) identical     004-0030-0 (thread    5) worse      004-0031-0 (thread    1) identical     004-0031-0 (thread    1) worse      004-0032-1 (thread    2) identical     004-0032-1 (thread    2) worse      005-0000-0 (thread    7) identical     005-0001-1 (thread    8) identical     005-0002-1 (thread    4) identical     005-0003-0 (thread    6) identical     005-0003-1 (thread    2) identical     005-0005-0 (thread    3) identical     005-0006-1 (thread    5) identical     005-0007-0 (thread    1) identical     005-0008-1 (thread    8) identical     005-0009-1 (thread    6) identical     005-0009-1 (thread    6) worse      005-0010-1 (thread    3) identical     005-0011-0 (thread    7) identical     005-0012-0 (thread    4) identical     005-0013-1 (thread    1) identical     005-0014-0 (thread    5) identical     005-0015-0 (thread    2) identical     005-0016-0 (thread    8) identical     005-0016-0 (thread    8) worse      005-0017-1 (thread    6) identical     005-0017-1 (thread    6) worse      005-0018-1 (thread    7) identical     005-0019-1 (thread    2) identical     005-0020-0 (thread    3) identical     005-0021-0 (thread    4) identical     005-0021-0 (thread    4) worse      005-0022-1 (thread    1) identical     005-0023-0 (thread    5) identical     005-0023-0 (thread    5) worse      005-0024-0 (thread    8) identical     005-0024-0 (thread    8) worse      005-0025-1 (thread    6) identical     005-0026-0 (thread    7) identical     005-0026-0 (thread    7) worse      005-0027-1 (thread    2) identical     005-0027-1 (thread    2) worse      005-0028-1 (thread    4) identical     005-0029-0 (thread    3) identical     005-0029-0 (thread    3) worse      005-0029-0 (thread    1) identical     005-0030-0 (thread    1) worse      005-0031-1 (thread    8) identical     005-0031-1 (thread    8) worse      005-0032-1 (thread    5) identical     005-0032-1 (thread    5) worse      
+Converged.
+done
+dvtditr (aa) Version 7.526
+alg=A, model=BLOSUM62, 1.53, -0.00, -0.00, noshift, amax=0.0
+8 thread(s)
+
+
+Strategy:
+ E-INS-i (Suitable for sequences with long unalignable regions, very slow)
+ Iterative refinement method (<16) with LOCAL pairwise alignment with generalized affine gap costs (Altschul 1998)
+
+If unsure which option to use, try 'mafft --auto input > output'.
+For more information, see 'mafft --help', 'mafft --man' and the mafft page.
+
+The default gap scoring scheme has been changed in version 7.110 (2013 Oct).
+It tends to insert more gaps into gap-rich regions than previous versions.
+To disable this change, add the --leavegappyregion option.
+
+Parameters for the E-INS-i option have been changed in version 7.243 (2015 Jun).
+To switch to the old parameters, use --oldgenafpair, instead of --genafpair.
+

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#PBS -N brca1_lineage
+#PBS -S /bin/bash
+#PBS -q SMALL
+#PBS -l select=1:ncpus=1:mem=4gb
+#PBS -l walltime=01:00:00
+#PBS -j n
+
+# Build a post-plan taxonomy-lineage evidence table from the frozen taxdump.
+# Submit with: qsub -v BRCA1_RUN_DIR=/absolute/run/directory run_taxonomy_lineage.pbs
+
+set -euo pipefail
+: "${BRCA1_RUN_DIR:?set BRCA1_RUN_DIR to the BRCA1 run directory}"
+if [[ "${BRCA1_RUN_DIR}" != /* || ! -d "${BRCA1_RUN_DIR}" ]]; then
+  echo "BRCA1_RUN_DIR must name an existing absolute directory" >&2
+  exit 2
+fi
+
+LOG_DIR="${BRCA1_RUN_DIR}/pbs-logs"
+mkdir -p -- "${LOG_DIR}"
+DIRECT_LOG="${LOG_DIR}/taxonomy-lineage.${PBS_JOBID:-manual}.log"
+if [[ -e "${DIRECT_LOG}" ]]; then
+  echo "Refusing to overwrite existing job log: ${DIRECT_LOG}" >&2
+  exit 2
+fi
+exec > "${DIRECT_LOG}" 2>&1
+
+if [[ -r /usr/appli/freeware/Modules/init/bash ]]; then
+  source /usr/appli/freeware/Modules/init/bash
+elif [[ -r /etc/profile.d/modules.sh ]]; then
+  source /etc/profile.d/modules.sh
+fi
+module purge
+module load Python/3.11.7
+
+cd "${BRCA1_RUN_DIR}"
+python3 scripts/export_taxonomy_lineage.py \
+  --taxonomy-resolution review/taxonomy_resolution.tsv \
+  --names-dmp acquisition/taxonomy/names.dmp \
+  --nodes-dmp acquisition/taxonomy/nodes.dmp \
+  --output annotation/taxonomy_lineage.tsv

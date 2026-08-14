@@ -1,0 +1,2 @@
+accession	taxon_id	species	gene_id	stage	decision	reason	replacement_accession	evidence
+XP_075436319.1	8439	Ascaphus truei	142473046	terminal_domain_qc	rejected	Only one distinct C-terminal BRCT-related interval was detected by the frozen Pfam 37.1 and SMART 9.0 scan; two are required.	XP_053555561.1	Public raw BLAST, InterProScan, exact inputs, software versions, and hashes are retained under qc/rejected-attempt/.

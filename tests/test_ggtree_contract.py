@@ -29,6 +29,9 @@ class GgtreeContractTests(unittest.TestCase):
             '"rectangular", "circular"',
             '"unrooted", "outgroup-rooted"',
             '"fasttree-sh-like", "sh-alrt/ufboot", "sh-alrt/bootstrap"',
+            "structural_root_marker_index",
+            '!identical(tree$node.label[[label_index]], "Root")',
+            "ggplot2::expand_limits(x = max(finite_x) + 0.30 * x_span)",
             '"#E69F00"',
             '"#009E73"',
             '"#999999"',
@@ -285,7 +288,83 @@ class GgtreeContractTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertTrue(Path(temporary, "rooted.svg").is_file())
+            rooted_svg = Path(temporary, "rooted.svg")
+            self.assertTrue(rooted_svg.is_file())
+            svg_text = rooted_svg.read_text(encoding="utf-8")
+            self.assertIn(">95/99<", svg_text)
+            self.assertNotIn(">Root<", svg_text)
+
+    def test_root_support_exception_is_rejected_away_from_structural_root(self) -> None:
+        rscript = shutil.which("Rscript")
+        if not rscript:
+            self.skipTest("Rscript is not installed")
+        dependency_check = subprocess.run(
+            [
+                rscript,
+                "-e",
+                'quit(status=if(all(vapply(c("ape","ggplot2","ggtree","openssl","svglite"), requireNamespace, quietly=TRUE, FUN.VALUE=logical(1)))) 0 else 1)',
+            ],
+            check=False,
+        )
+        if dependency_check.returncode != 0:
+            self.skipTest("Local ggtree runtime packages are not all installed")
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_path = Path(temporary)
+            non_root_marker = temporary_path / "non-root-marker.nwk"
+            non_root_marker.write_text(
+                "((QUERY_001:0.1,(MOUSE_CAN:0.1,CHICKEN_OK:0.1)Root:0.1)95/99:0.1,"
+                "CIONA_OUT:0.3)98/100;\n",
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    rscript,
+                    str(SCRIPT),
+                    "--tree",
+                    str(non_root_marker),
+                    "--metadata",
+                    str(FIXTURE / "sequence_metadata.tsv"),
+                    "--out-prefix",
+                    str(temporary_path / "non-root-marker"),
+                    "--root-state",
+                    "outgroup-rooted",
+                    "--support-format",
+                    "sh-alrt/ufboot",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("explicit value/value form", completed.stderr)
+
+            unrooted_marker = temporary_path / "unrooted-marker.nwk"
+            unrooted_marker.write_text(
+                "(QUERY_001:0.1,(MOUSE_CAN:0.1,CHICKEN_OK:0.1)95/99:0.1,"
+                "CIONA_OUT:0.3)Root;\n",
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    rscript,
+                    str(SCRIPT),
+                    "--tree",
+                    str(unrooted_marker),
+                    "--metadata",
+                    str(FIXTURE / "sequence_metadata.tsv"),
+                    "--out-prefix",
+                    str(temporary_path / "unrooted-marker"),
+                    "--root-state",
+                    "unrooted",
+                    "--support-format",
+                    "sh-alrt/ufboot",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 2)
+            self.assertIn("explicit value/value form", completed.stderr)
 
 
 if __name__ == "__main__":

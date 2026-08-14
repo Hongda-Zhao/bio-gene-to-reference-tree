@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+#PBS -N brca1_plan
+#PBS -S /bin/bash
+#PBS -q SMALL
+#PBS -l select=1:ncpus=1:mem=4gb
+#PBS -l walltime=01:00:00
+#PBS -j oe
+
+# Compile the deterministic, offline reference-review bundle. This job plans
+# commands only; it never launches alignment, trimming, or tree inference.
+# Submit with:
+#   qsub -v BRCA1_RUN_DIR=/absolute/run/directory run_reference_plan.pbs
+
+set -euo pipefail
+IFS=$'\n\t'
+umask 027
+
+: "${BRCA1_RUN_DIR:?set BRCA1_RUN_DIR to the expanded BRCA1 run directory}"
+if [[ "${BRCA1_RUN_DIR}" != /* || ! -d "${BRCA1_RUN_DIR}" ]]; then
+  printf 'BRCA1_RUN_DIR must be an existing absolute directory.\n' >&2
+  exit 2
+fi
+
+for required in \
+  "${BRCA1_RUN_DIR}/inputs/request.json" \
+  "${BRCA1_RUN_DIR}/inputs/query.faa" \
+  "${BRCA1_RUN_DIR}/inputs/candidates.faa" \
+  "${BRCA1_RUN_DIR}/inputs/candidates.tsv" \
+  "${BRCA1_RUN_DIR}/inputs/taxonomy/names.dmp" \
+  "${BRCA1_RUN_DIR}/inputs/taxonomy/nodes.dmp" \
+  "${BRCA1_RUN_DIR}/scripts/gene_to_tree.py" \
+  "${BRCA1_RUN_DIR}/scripts/ncbi_taxonomy.py"; do
+  if [[ ! -s "${required}" ]]; then
+    printf 'Required non-empty planning input is missing: %s\n' "${required}" >&2
+    exit 2
+  fi
+done
+
+if [[ -e "${BRCA1_RUN_DIR}/review" ]]; then
+  printf 'Refusing to overwrite an existing review directory.\n' >&2
+  exit 2
+fi
+
+LOG_DIR="${BRCA1_RUN_DIR}/pbs-logs"
+mkdir -p -- "${LOG_DIR}"
+DIRECT_LOG="${LOG_DIR}/reference-plan.${PBS_JOBID:-manual}.log"
+if [[ -e "${DIRECT_LOG}" ]]; then
+  printf 'Refusing to overwrite an existing planning log.\n' >&2
+  exit 2
+fi
+exec > "${DIRECT_LOG}" 2>&1
+
+if [[ -r /usr/appli/freeware/Modules/init/bash ]]; then
+  # shellcheck source=/dev/null
+  source /usr/appli/freeware/Modules/init/bash
+elif [[ -r /etc/profile.d/modules.sh ]]; then
+  # shellcheck source=/dev/null
+  source /etc/profile.d/modules.sh
+fi
+module purge
+module load Python/3.11.7
+
+cd "${BRCA1_RUN_DIR}"
+python3 scripts/gene_to_tree.py plan \
+  --request inputs/request.json \
+  --out review \
+  --offline \
+  --dry-run
+
+printf 'Reference-review files: %s\n' "$(find review -type f | wc -l)"
+sha256sum review/plan.json review/manifest.json review/selected_references.tsv

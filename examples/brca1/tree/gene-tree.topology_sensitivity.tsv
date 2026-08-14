@@ -1,0 +1,6 @@
+comparison_id	reference_tree	profile_tree	n_tips	rf_distance	rf_maximum	rf_normalized	topology_identical	outgroup_isolating_split	root_screen_status	interpretation
+primary	tree/iqtree/brca1-balanced.treefile	tree/iqtree/brca1-balanced.treefile	18	0	30	0.000000	true	true	pass	distance 0: identical unrooted topology (self-check)
+raw-fasttree	tree/iqtree/brca1-balanced.treefile	exploratory-tree/raw.fasttree.nwk	18	8	30	0.266667	false	true	pass	distance > 0: unrooted topology differs
+permissive-fasttree	tree/iqtree/brca1-balanced.treefile	exploratory-tree/permissive.fasttree.nwk	18	8	30	0.266667	false	true	pass	distance > 0: unrooted topology differs
+balanced-fasttree	tree/iqtree/brca1-balanced.treefile	exploratory-tree/balanced.fasttree.nwk	18	8	30	0.266667	false	true	pass	distance > 0: unrooted topology differs
+strict-fasttree	tree/iqtree/brca1-balanced.treefile	exploratory-tree/strict.fasttree.nwk	18	8	30	0.266667	false	true	pass	distance > 0: unrooted topology differs

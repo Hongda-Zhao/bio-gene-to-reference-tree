@@ -64,6 +64,8 @@ Verify the approved MSA hash, exact executable/version, resource limits, thread 
 
 Preserve the unrooted tree and all native logs. Create a rooted derivative only from approved outgroup tips. Re-open the decision gate if outgroup behavior, long-branch attraction, or model sensitivity makes the root unreliable.
 
+When the rooted copy retains node support, map labels by canonical unrooted bipartition rather than by internal-node number, then verify that every original split retains its exact label once. Rerooting software may otherwise shift support labels along the reroot path.
+
 ## Annotation and evidence gate
 
 Generate the iTOL color strip and metadata locally. Generate a range dataset only after checking contiguity/monophyly. Obtain separate permission before uploading unpublished material to iTOL.

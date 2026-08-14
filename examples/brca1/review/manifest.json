@@ -1,0 +1,509 @@
+{
+  "approved_plan_hash": null,
+  "commands": [
+    {
+      "argv": [
+        "mafft",
+        "--genafpair",
+        "--maxiterate",
+        "1000",
+        "--thread",
+        "8",
+        "reference_set.faa"
+      ],
+      "executed": false,
+      "id": "align-proteins",
+      "inputs": [
+        "reference_set.faa"
+      ],
+      "outputs": [
+        "alignment.raw.faa"
+      ],
+      "stage": "align-and-qc",
+      "status": "planned",
+      "stdout": "alignment.raw.faa",
+      "tool": "mafft"
+    },
+    {
+      "argv": [
+        "trimal",
+        "-in",
+        "alignment.raw.faa",
+        "-out",
+        "alignment.trimmed.permissive.faa",
+        "-gt",
+        "0.1"
+      ],
+      "executed": false,
+      "id": "trim-permissive",
+      "inputs": [
+        "alignment.raw.faa"
+      ],
+      "outputs": [
+        "alignment.trimmed.permissive.faa"
+      ],
+      "stage": "trim-and-qc",
+      "status": "planned",
+      "stdout": null,
+      "threshold_semantics": "Retain columns whose fraction of non-gap residues meets the configured threshold.",
+      "tool": "trimal"
+    },
+    {
+      "argv": [
+        "trimal",
+        "-in",
+        "alignment.raw.faa",
+        "-out",
+        "alignment.trimmed.balanced.faa",
+        "-gt",
+        "0.5"
+      ],
+      "executed": false,
+      "id": "trim-balanced",
+      "inputs": [
+        "alignment.raw.faa"
+      ],
+      "outputs": [
+        "alignment.trimmed.balanced.faa"
+      ],
+      "stage": "trim-and-qc",
+      "status": "planned",
+      "stdout": null,
+      "threshold_semantics": "Retain columns whose fraction of non-gap residues meets the configured threshold.",
+      "tool": "trimal"
+    },
+    {
+      "argv": [
+        "trimal",
+        "-in",
+        "alignment.raw.faa",
+        "-out",
+        "alignment.trimmed.strict.faa",
+        "-gt",
+        "0.9"
+      ],
+      "executed": false,
+      "id": "trim-strict",
+      "inputs": [
+        "alignment.raw.faa"
+      ],
+      "outputs": [
+        "alignment.trimmed.strict.faa"
+      ],
+      "stage": "trim-and-qc",
+      "status": "planned",
+      "stdout": null,
+      "threshold_semantics": "Retain columns whose fraction of non-gap residues meets the configured threshold.",
+      "tool": "trimal"
+    },
+    {
+      "argv": [
+        "iqtree2",
+        "-s",
+        "alignment.trimmed.balanced.faa",
+        "-m",
+        "MFP",
+        "-B",
+        "1000",
+        "-bnni",
+        "-alrt",
+        "1000",
+        "-T",
+        "8",
+        "-seed",
+        "20260813",
+        "--prefix",
+        "gene-tree"
+      ],
+      "executed": false,
+      "id": "infer-accurate-tree",
+      "inputs": [
+        "alignment.trimmed.balanced.faa"
+      ],
+      "outputs": [
+        "gene-tree.treefile",
+        "gene-tree.contree",
+        "gene-tree.iqtree"
+      ],
+      "stage": "infer-tree",
+      "status": "planned",
+      "stdout": null,
+      "support_semantics": "UFBoot2; interpret >=95 separately from standard bootstrap.",
+      "tool": "iqtree2"
+    }
+  ],
+  "created_at": null,
+  "database_provenance": [
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_000001405.40-RS_2025_08"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_000001635.27-RS_2024_02"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_002263795.3-RS_2024_12"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_011386835.1-RS_2024_05"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_027887165.2-RS_2026_06"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_028858775.2-RS_2026_05"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_030014295.1-RS_2024_04"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_030445035.2-RS_2025_01"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_035594765.1-RS_2024_02"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_041296265.1-RS_2024_12"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_048771995.1-RS_2025_04"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_901001135.2-RS_2026_03"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "GCF_964237555.1-RS_2024_11"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "NCBI Canis lupus familiaris Annotation Release 106"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "NCBI Crocodylus porosus Annotation Release 100"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "NCBI Gallus gallus Annotation Release 106"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "NCBI Pseudonaja textilis Annotation Release 100"
+    },
+    {
+      "retrieved_at": "2026-08-13",
+      "source_db": "NCBI Gene / RefSeq",
+      "source_release": "NCBI Xenopus tropicalis Annotation Release 104"
+    },
+    {
+      "names_sha256": "c3aac85da1bf473792e95bf8fe2d6933dcb31f2d649a3f8579e21011d772dca9",
+      "nodes_sha256": "502ef4e7f1a8383e89d759b056524e8bcc16fe6950965f972d13f44411430f17",
+      "resolver_version": "0.1.0",
+      "retrieved_at": "2026-08-13T08:23:00Z",
+      "source_db": "NCBI Taxonomy new_taxdump",
+      "source_release": "new_taxdump_2026-08-01",
+      "source_url": "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump_archive/new_taxdump_2026-08-01.zip"
+    }
+  ],
+  "decisions": {
+    "blockers": [],
+    "rejected": [],
+    "selected_accessions": [
+      "NP_009225.1",
+      "XP_003414318.3",
+      "XP_072775070.1",
+      "NP_989500.1",
+      "XP_019406054.1",
+      "NP_033894.3",
+      "XP_017204702.2",
+      "NP_001013434.1",
+      "XP_014595447.2",
+      "NP_848668.1",
+      "XP_008111382.1",
+      "XP_026576759.1",
+      "NP_001029141.1",
+      "NP_001038958.1",
+      "XP_023967135.2",
+      "XP_058140293.1",
+      "NP_001107963.1",
+      "XP_029429046.1"
+    ]
+  },
+  "errors": [],
+  "execution": {
+    "external_processes": 0,
+    "network_calls": 0
+  },
+  "input_artifacts": [
+    {
+      "logical_path": "inputs/request.json",
+      "role": "request",
+      "sha256": "6f1768ff52ad0ec4785796a6733de95bc3bf28087528e1b8d1f394c7ee33814e"
+    },
+    {
+      "logical_path": "inputs/query.faa",
+      "role": "query_fasta",
+      "sha256": "ef86d20031f519df3b0c9878e77c5755ba8ce0a5964e7b3a0ac26d0c8bddd3b5"
+    },
+    {
+      "logical_path": "inputs/candidates.faa",
+      "role": "candidate_fasta",
+      "sha256": "023aaba962252538526a5bea20692e3510271f2ce2b637a5bb70c7140d484a8f"
+    },
+    {
+      "logical_path": "inputs/candidates.tsv",
+      "role": "candidate_table",
+      "sha256": "a4e9b44d8ad9dae8b0968902aedd823ed3a2afef60a89e2b72911bbab7078904"
+    },
+    {
+      "logical_path": "inputs/names.dmp",
+      "role": "taxonomy_names",
+      "sha256": "c3aac85da1bf473792e95bf8fe2d6933dcb31f2d649a3f8579e21011d772dca9"
+    },
+    {
+      "logical_path": "inputs/nodes.dmp",
+      "role": "taxonomy_nodes",
+      "sha256": "502ef4e7f1a8383e89d759b056524e8bcc16fe6950965f972d13f44411430f17"
+    }
+  ],
+  "mode": "offline-dry-run",
+  "offline": true,
+  "output_artifacts": [
+    {
+      "bytes": 13871,
+      "logical_path": "selected_references.tsv",
+      "media_type": "text/tab-separated-values",
+      "sha256": "60f0ad566875c04b7a675d1021385b80d3627b588edf72066c2e743f21cb1141"
+    },
+    {
+      "bytes": 446,
+      "logical_path": "rejected_references.tsv",
+      "media_type": "text/tab-separated-values",
+      "sha256": "077102bfcc405dffcb1d442f5e83cd751b9059dd8b3ca745dc96f701c4aaa99f"
+    },
+    {
+      "bytes": 33280,
+      "logical_path": "reference_set.faa",
+      "media_type": "text/x-fasta",
+      "sha256": "cea86b4416bcde376e6d8177a2b51d5cd2a501e458af6da9405e9acd6ed69dd8"
+    },
+    {
+      "bytes": 14206,
+      "logical_path": "sequence_metadata.tsv",
+      "media_type": "text/tab-separated-values",
+      "sha256": "e3f304c50a36d6383311fc11622a6124c03ec595d74a1c2193ba18dda5350d9f"
+    },
+    {
+      "bytes": 13574,
+      "logical_path": "plan.json",
+      "media_type": "application/json",
+      "sha256": "461c51cf43249a1305ccae816879d60a8416280390aa6bfa6f48a1638164880e"
+    },
+    {
+      "bytes": 826,
+      "logical_path": "itol_roles.txt",
+      "media_type": "text/plain",
+      "sha256": "7c9c2f4ef51cf911cb0ce28ddb130b98d4d665c33ec619d71cafed5c65cb72a8"
+    },
+    {
+      "bytes": 7184,
+      "logical_path": "taxonomy_resolution.tsv",
+      "media_type": "text/tab-separated-values",
+      "sha256": "26a8463ee62fb0d7465d2199b053e9ca240fb02c501df3685994e95393f938ac"
+    }
+  ],
+  "plan_hash": "8b03bd3fae2882a07351fc83f1b8879ee616ed61f60570d029c5ef8471f65da8",
+  "policy": {
+    "alignment": {
+      "mode": "einsi",
+      "threads": 8,
+      "tool": "mafft"
+    },
+    "clustering": {
+      "algorithm": "easy-linclust",
+      "coverage": 0.8,
+      "coverage_mode": 0,
+      "min_seq_id": 0.95,
+      "mode": "auto",
+      "preserve_analysis_groups": [
+        "study",
+        "outgroup"
+      ],
+      "threads": 8,
+      "tool": "mmseqs2",
+      "trigger_min_sequences": 200
+    },
+    "itol": {
+      "colors": {
+        "expanded": "#009E73",
+        "outgroup": "#999999",
+        "study": "#E69F00"
+      },
+      "dataset_label": "BRCA1 sequence roles",
+      "enabled": true,
+      "generate_ranges_after_tree_qc": false
+    },
+    "literature": {
+      "enabled": true,
+      "include_foundational": true,
+      "sources": [
+        "primary phylogenomic literature",
+        "NCBI Orthologs methodology",
+        "NCBI Taxonomy"
+      ],
+      "taxon_fallback_ranks": [
+        "species",
+        "genus",
+        "family",
+        "order",
+        "class"
+      ],
+      "years_back": 10
+    },
+    "objective": "ortholog-tree",
+    "reference_strategy": "ortholog-first",
+    "selection": {
+      "allow_paralogs": false,
+      "max_length_ratio": 1.1,
+      "max_per_taxon": 1,
+      "max_references": 17,
+      "min_ingroup_taxa": 15,
+      "min_length_ratio": 0.75,
+      "min_query_coverage": 0.1,
+      "min_target_coverage": 0.1,
+      "outgroup_count": 2,
+      "require_outgroup": true
+    },
+    "sequence_context": "cellular",
+    "taxon_scope": {
+      "ingroup": "Amniota",
+      "outgroup": "Amphibia: one anuran and one caecilian NCBI ortholog"
+    },
+    "taxonomy": {
+      "enabled": true,
+      "match_mode": "exact-scientific-name",
+      "names_sha256": "c3aac85da1bf473792e95bf8fe2d6933dcb31f2d649a3f8579e21011d772dca9",
+      "nodes_sha256": "502ef4e7f1a8383e89d759b056524e8bcc16fe6950965f972d13f44411430f17",
+      "records_validated": 18,
+      "resolution_artifact": "taxonomy_resolution.tsv",
+      "resolver_version": "0.1.0",
+      "retrieved_at": "2026-08-13T08:23:00Z",
+      "snapshot": "new_taxdump_2026-08-01",
+      "source": "ncbi-taxdump",
+      "source_url": "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump_archive/new_taxdump_2026-08-01.zip",
+      "status": "validated"
+    },
+    "tree": {
+      "bnni": true,
+      "mode": "accurate",
+      "model": "MFP",
+      "rooting": "outgroup",
+      "seed": 20260813,
+      "sh_alrt": 1000,
+      "support_method": "ultrafast",
+      "support_replicates": 1000,
+      "threads": 8,
+      "tool": "iqtree2"
+    },
+    "trimming": {
+      "compare_topologies": true,
+      "enabled": true,
+      "min_retained_fraction": 0.3,
+      "primary_profile": "balanced",
+      "profiles": [
+        {
+          "gap_threshold": 0.1,
+          "id": "permissive"
+        },
+        {
+          "gap_threshold": 0.5,
+          "id": "balanced"
+        },
+        {
+          "gap_threshold": 0.9,
+          "id": "strict"
+        }
+      ],
+      "tool": "trimal"
+    }
+  },
+  "project_id": "brca1-amniote-worked-example",
+  "query": {
+    "id": "NP_009225.1",
+    "length": 1863,
+    "organism": "Homo sapiens",
+    "sequence_sha256": "80d7199c8d1550a5ba8387043481c1acf0f070df410b47c2bc1375584b59bdf1",
+    "taxon_id": "9606"
+  },
+  "request_path_and_hash": {
+    "logical_path": "inputs/request.json",
+    "sha256": "6f1768ff52ad0ec4785796a6733de95bc3bf28087528e1b8d1f394c7ee33814e"
+  },
+  "run_id": "gtr-51d4906dff86327a",
+  "schema_version": "0.3",
+  "tool_versions": {
+    "fasttree": {
+      "status": "not-inspected",
+      "version": null
+    },
+    "iqtree2": {
+      "status": "not-inspected",
+      "version": null
+    },
+    "mafft": {
+      "status": "not-inspected",
+      "version": null
+    },
+    "mmseqs2": {
+      "status": "not-inspected",
+      "version": null
+    },
+    "rscript": {
+      "status": "not-inspected",
+      "version": null
+    },
+    "trimal": {
+      "status": "not-inspected",
+      "version": null
+    }
+  },
+  "warnings": [
+    "No network request or external executable was run.",
+    "Similarity alone does not establish orthology.",
+    "A supported gene-tree topology is not automatically a species tree.",
+    "Choose a nearby homologous sister-lineage outgroup; never choose the most distant hit automatically.",
+    "One or more candidates lack a recorded taxonomic lineage.",
+    "Extreme trimAl profiles are sensitivity analyses, not automatic defaults: permissive."
+  ],
+  "workflow_state": "pending-reference-approval",
+  "workflow_version": "0.3.0"
+}

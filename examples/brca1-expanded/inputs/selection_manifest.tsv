@@ -1,0 +1,51 @@
+accession	taxon_id	species	gene_id	analysis_group	clade	is_reviewed	selection_rationale
+NP_009225.1	9606	Homo sapiens	672	study	Primates	true	human RefSeq focal isoform
+NP_001038958.1	9598	Pan troglodytes	449497	expanded	Primates	true	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+NP_001108421.1	9544	Macaca mulatta	712634	expanded	Primates	true	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_017364815.1	2715852	Cebus imitator	108289781	expanded	Primates	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_045382602.1	9447	Lemur catta	123620994	expanded	Primates	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+NP_033894.3	10090	Mus musculus	12189	expanded	Glires	true	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_017204702.2	9986	Oryctolagus cuniculus	100347269	expanded	Glires	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+NP_036646.2	10116	Rattus norvegicus	497672	expanded	Glires	true	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_013005150.1	10141	Cavia porcellus	100722339	expanded	Glires	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_047399506.1	30640	Sciurus carolinensis	124979164	expanded	Glires	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+NP_001013434.1	9615	Canis lupus familiaris	403437	expanded	Laurasiatheria	true	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+NP_848668.1	9913	Bos taurus	353120	expanded	Laurasiatheria	true	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_014595447.2	9796	Equus caballus	100051990	expanded	Laurasiatheria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_019673492.2	9685	Felis catus	101081937	expanded	Laurasiatheria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_013845389.1	9823	Sus scrofa	100049662	expanded	Laurasiatheria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_014314296.1	59463	Myotis lucifugus	102434930	expanded	Laurasiatheria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_060059410.1	9365	Erinaceus europaeus	103125983	expanded	Laurasiatheria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_003414318.3	9785	Loxodonta africana	100653763	expanded	Afrotheria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_023581001.1	127582	Trichechus manatus latirostris	101356605	expanded	Afrotheria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_075417988.1	94439	Tenrec ecaudatus	142459887	expanded	Afrotheria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_058140293.1	9361	Dasypus novemcinctus	101429125	expanded	Xenarthra	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_037665688.1	27675	Choloepus didactylus	119514151	expanded	Xenarthra	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+NP_001029141.1	13616	Monodelphis domestica	554178	expanded	Marsupialia	true	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_020828279.1	38626	Phascolarctos cinereus	110198384	expanded	Marsupialia	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_074079897.1	92651	Macrotis lagotis	141513703	expanded	Marsupialia	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+NP_989500.1	9031	Gallus gallus	373983	expanded	Aves	true	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_072775070.1	59729	Taeniopygia guttata	100224649	expanded	Aves	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_068775093.1	8801	Struthio camelus	104141229	expanded	Aves	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_025969353.2	8790	Dromaius novaehollandiae	112991230	expanded	Aves	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_027301205.3	8839	Anas platyrhynchos	101789679	expanded	Aves	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_021136715.2	8932	Columba livia	102087906	expanded	Aves	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_029879002.1	223781	Aquila chrysaetos chrysaetos	115344989	expanded	Aves	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_019328559.1	9233	Aptenodytes forsteri	103902465	expanded	Aves	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_030901062.1	13146	Melopsittacus undulatus	101870799	expanded	Aves	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_019406054.1	8502	Crocodylus porosus	109320418	expanded	Crocodylia	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_014464710.1	8496	Alligator mississippiensis	102573178	expanded	Crocodylia	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_019360910.1	94835	Gavialis gangeticus	109289366	expanded	Crocodylia	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_023967135.2	8478	Chrysemys picta bellii	101942702	expanded	Testudines	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_006125762.2	13735	Pelodiscus sinensis	102444617	expanded	Testudines	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_027690803.2	8469	Chelonia mydas	102936790	expanded	Testudines	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_008111382.1	28377	Anolis carolinensis	100553919	expanded	Lepidosauria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_026576759.1	8673	Pseudonaja textilis	113449821	expanded	Lepidosauria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_020651752.3	103695	Pogona vitticeps	110080303	expanded	Lepidosauria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_034272113.1	94885	Pantherophis guttatus	117664858	expanded	Lepidosauria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+XP_044274665.1	61221	Varanus komodoensis	123017394	expanded	Lepidosauria	false	taxonomically balanced NCBI Ortholog group representative; selected before executable screening.
+NP_001107963.1	8364	Xenopus tropicalis	733513	outgroup	Anura	true	amphibian outgroup candidate; root only after split and stability review
+XP_053555561.1	8345	Bombina bombina	128646280	outgroup	Anura	false	amphibian outgroup candidate; replacement selected after the original Ascaphus model failed the two-BRCT gate; root only after split and stability review
+XP_069490300.1	8296	Ambystoma mexicanum	138521410	outgroup	Caudata	false	amphibian outgroup candidate; root only after split and stability review
+XP_069093862.1	8319	Pleurodeles waltl	138299491	outgroup	Caudata	false	amphibian outgroup candidate; root only after split and stability review
+XP_029429046.1	194408	Rhinatrema bivittatum	115074072	outgroup	Gymnophiona	false	amphibian outgroup candidate; root only after split and stability review

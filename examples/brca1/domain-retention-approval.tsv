@@ -1,0 +1,7 @@
+approved_at_utc	2026-08-13T09:17:42Z
+audit_sha256	f492fe17f326cdd7576857c9620438d178da7a8cd39ca9195ffa2b63acf45777
+minimum_required_fraction	0.800000
+intervals_audited	162
+balanced_minimum_fraction	0.976190
+strict_minimum_fraction	0.936842
+decision	approved; all InterProScan-derived RING and tandem BRCT intervals retained at least 80 percent of residues in every trim profile

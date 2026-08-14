@@ -1,0 +1,12 @@
+{
+  "archive_sha256": "e67d56c3e87eac14a28feea8cf710ac612571f00a4f32ba3b85bae0020cd123a",
+  "archive_sha256_verification": "computed and verified by the authorized host before extraction",
+  "match_mode": "exact-scientific-name",
+  "names_dmp_sha256": "c3aac85da1bf473792e95bf8fe2d6933dcb31f2d649a3f8579e21011d772dca9",
+  "nodes_dmp_sha256": "502ef4e7f1a8383e89d759b056524e8bcc16fe6950965f972d13f44411430f17",
+  "records_resolved": 50,
+  "retrieved_at": "2026-08-13T08:23:00Z",
+  "schema_version": "0.1",
+  "snapshot": "new_taxdump_2026-08-01",
+  "source_url": "https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump_archive/new_taxdump_2026-08-01.zip"
+}

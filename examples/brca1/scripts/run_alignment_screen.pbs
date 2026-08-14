@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+#PBS -N brca1_align
+#PBS -S /bin/bash
+#PBS -q SMALL
+#PBS -l select=1:ncpus=8:mem=32gb
+#PBS -l walltime=06:00:00
+#PBS -j n
+
+set -euo pipefail
+
+: "${BRCA1_RUN_DIR:?submit with qsub -v BRCA1_RUN_DIR=/absolute/run/path}"
+if [[ ! -d "${BRCA1_RUN_DIR}" || ! -f "${BRCA1_RUN_DIR}/review/reference_set.faa" ]]; then
+  echo "BRCA1_RUN_DIR does not contain review/reference_set.faa" >&2
+  exit 2
+fi
+
+LOG_DIR="${BRCA1_RUN_DIR}/pbs-logs"
+mkdir -p -- "${LOG_DIR}"
+DIRECT_LOG="${LOG_DIR}/alignment-screen.${PBS_JOBID:-manual}.log"
+if [[ -e "${DIRECT_LOG}" ]]; then
+  echo "Refusing to overwrite existing job log: ${DIRECT_LOG}" >&2
+  exit 2
+fi
+exec > "${DIRECT_LOG}" 2>&1
+
+if [[ -r /usr/appli/freeware/Modules/init/bash ]]; then
+  source /usr/appli/freeware/Modules/init/bash
+elif [[ -r /etc/profile.d/modules.sh ]]; then
+  source /etc/profile.d/modules.sh
+fi
+module purge
+module load mafft/7.526 trimal/1.5.1 FastTree/2.2.0 Python/3.11.7
+
+cd "${BRCA1_RUN_DIR}"
+if [[ -e alignment || -e exploratory-tree || -e provenance/alignment_tool_versions.txt ]]; then
+  echo "Refusing to overwrite an existing alignment run" >&2
+  exit 2
+fi
+mkdir -p alignment exploratory-tree provenance
+
+{
+  mafft --version 2>&1
+  printf 'trimAl\t1.5.1\n'
+  FastTree 2>&1 || true
+  python3 --version
+} > provenance/alignment_tool_versions.txt
+
+mafft --genafpair --maxiterate 1000 --thread 8 \
+  review/reference_set.faa > alignment/alignment.raw.faa \
+  2> alignment/mafft.stderr.log
+
+trimal -in alignment/alignment.raw.faa \
+  -out alignment/alignment.trimmed.permissive.faa -fasta -gt 0.1 \
+  > alignment/trimal.permissive.stdout.log 2> alignment/trimal.permissive.stderr.log
+trimal -in alignment/alignment.raw.faa \
+  -out alignment/alignment.trimmed.balanced.faa -fasta -gt 0.5 \
+  > alignment/trimal.balanced.stdout.log 2> alignment/trimal.balanced.stderr.log
+trimal -in alignment/alignment.raw.faa \
+  -out alignment/alignment.trimmed.strict.faa -fasta -gt 0.9 \
+  > alignment/trimal.strict.stdout.log 2> alignment/trimal.strict.stderr.log
+
+python3 scripts/summarize_alignment.py \
+  --alignment raw=alignment/alignment.raw.faa \
+  --alignment permissive=alignment/alignment.trimmed.permissive.faa \
+  --alignment balanced=alignment/alignment.trimmed.balanced.faa \
+  --alignment strict=alignment/alignment.trimmed.strict.faa \
+  --output-dir alignment/qc
+
+for profile in raw permissive balanced strict; do
+  if [[ "${profile}" == raw ]]; then
+    msa="alignment/alignment.raw.faa"
+  else
+    msa="alignment/alignment.trimmed.${profile}.faa"
+  fi
+  FastTree -wag -gamma "${msa}" \
+    > "exploratory-tree/${profile}.fasttree.nwk" \
+    2> "exploratory-tree/${profile}.fasttree.log"
+done
+
+sha256sum alignment/*.faa exploratory-tree/*.nwk \
+  > provenance/alignment_tree_checksums.sha256

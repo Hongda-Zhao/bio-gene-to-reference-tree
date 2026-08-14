@@ -79,6 +79,8 @@ For deep protein relationships, test whether site-homogeneous ModelFinder candid
 
 Infer and retain an unrooted tree. Create a rooted derivative only with approved homologous outgroup accessions that lie outside but near the ingroup. Prefer multiple nearby candidates when feasible. Re-check the topology after removing a long-branched outgroup or switching to a richer model.
 
+Treat internal support as an annotation of an **unrooted bipartition**, not as a label that may be copied by internal-node number. Some tree libraries renumber nodes or shift node labels along the reroot path. Before rerooting, capture each unique unrooted split and its exact support label; after rerooting, remap by canonical bipartition, handle the duplicated root split once, and assert exact split-to-support preservation. If the tool cannot guarantee this, keep support on the unrooted tree and render the rooted derivative without node support.
+
 Stop when the proposed outgroup is a distant paralog, non-homologous, excessively long-branched, inside the ingroup, or unstable across reasonable analyses. Do not midpoint-root automatically.
 
 ## Required records

@@ -12,3 +12,24 @@ dist/
 build/
 *.egg-info/
 *.tmp
+
+# BRCA1 worked-example inputs and scheduler residue that are intentionally
+# outside the public, receipt-based artifact bundle.
+examples/brca1/acquisition/
+examples/brca1/pbs-logs/
+examples/brca1/private-iqtree-output/
+examples/brca1/*.o[0-9]*
+examples/brca1/*.e[0-9]*
+examples/brca1/**/*.o[0-9]*
+examples/brca1/**/*.e[0-9]*
+
+# The expanded BRCA1 review candidate keeps provider archives, extracted
+# taxdump files, scheduler logs, and unsuccessful compute attempts off GitHub.
+examples/brca1-expanded/acquisition/
+examples/brca1-expanded/pbs-logs/
+examples/brca1-expanded/qc-attempts/
+examples/brca1-expanded/private-tree-output/
+examples/brca1-expanded/*.o[0-9]*
+examples/brca1-expanded/*.e[0-9]*
+examples/brca1-expanded/**/*.o[0-9]*
+examples/brca1-expanded/**/*.e[0-9]*

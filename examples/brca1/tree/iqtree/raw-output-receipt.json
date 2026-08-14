@@ -1,0 +1,76 @@
+{
+  "omitted_file_counts": {
+    "iqtree_checkpoint": 1,
+    "iqtree_model": 1,
+    "wrapper_checksums": 1
+  },
+  "published_file_count": 9,
+  "raw_file_manifest": [
+    {
+      "byte_size": 660,
+      "filename": "brca1-balanced.bionj",
+      "sha256": "5086c3865990d664cb93c970eb70cd7f7a501640e2cfc164a20804e4c55051a0"
+    },
+    {
+      "byte_size": 181774,
+      "filename": "brca1-balanced.ckp.gz",
+      "sha256": "615fbdcb3850b4107b09f74417a47ceaca09d328d14360115aebdc0c5c5df38d"
+    },
+    {
+      "byte_size": 758,
+      "filename": "brca1-balanced.contree",
+      "sha256": "e763c49199bb04be95a19d3b0df1d07fff3c3aa8eba2babdef9c4a6919f17587"
+    },
+    {
+      "byte_size": 21181,
+      "filename": "brca1-balanced.iqtree",
+      "sha256": "14d09d5b32b60dbd4dff64655f47d892544f8f9debd4da2d23f54fb73103fdf6"
+    },
+    {
+      "byte_size": 89820,
+      "filename": "brca1-balanced.log",
+      "sha256": "28a531a316bea257cf1a34f4c5f3052269c2a4d1ff3b7e66f29671e91e48968e"
+    },
+    {
+      "byte_size": 3531,
+      "filename": "brca1-balanced.mldist",
+      "sha256": "32cebd3854703aa92d6c0cb5b65e447f0f23422aa2324bf9d5b6e5ebb23e6382"
+    },
+    {
+      "byte_size": 4234,
+      "filename": "brca1-balanced.model.gz",
+      "sha256": "5b1e29ab9962aa695bd6b668161763f6ffb934d241dd045e783b8eb3017712e6"
+    },
+    {
+      "byte_size": 1281,
+      "filename": "brca1-balanced.splits.nex",
+      "sha256": "603cc43e5adeee6c114b2b7fb45bebdfd0b43345f6fa0ebdc12e5728f84121e4"
+    },
+    {
+      "byte_size": 827,
+      "filename": "brca1-balanced.treefile",
+      "sha256": "148580bb39014f9f910c8ad8a1e12cf4b8e2688594d2b3325b6d32f14d8e40af"
+    },
+    {
+      "byte_size": 720000,
+      "filename": "brca1-balanced.ufboot",
+      "sha256": "93e6b29217e31604b8cc0de3a76b46b3b3eb7bdbc1c7aead4f34084b3563833c"
+    },
+    {
+      "byte_size": 885,
+      "filename": "checksums.sha256",
+      "sha256": "e359360d49ebe3194bbd22bbb5d837da91bdb01759df21dda185c9f55ac69044"
+    },
+    {
+      "byte_size": 212,
+      "filename": "software_version.txt",
+      "sha256": "4ec85e058a26f2eb7dc3c0c674e2be03d7dc0698812a87dadf2dfed115a969ed"
+    }
+  ],
+  "raw_manifest_encoding": "UTF-8 filename length (8-byte big-endian), filename bytes, byte size (8-byte big-endian), raw SHA-256 digest bytes; records sorted by filename",
+  "raw_manifest_sha256": "3ad127115856afc353b2e8102bdc75fe64f397625e9b85a420f1b48182b2e214",
+  "raw_regular_file_count": 12,
+  "redacted_file_count": 2,
+  "redacted_occurrence_count": 6,
+  "schema_version": 1
+}

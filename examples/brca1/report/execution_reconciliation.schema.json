@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Hongda-Zhao/bio-gene-to-reference-tree/blob/main/examples/brca1/report/execution_reconciliation.schema.json",
+  "title": "BRCA1 post-hoc execution reconciliation receipt",
+  "description": "Binds the prospectively approved plan to the exact host-side commands while preserving command deviations as deviations rather than retroactive approvals.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema_path",
+    "analysis_id",
+    "status",
+    "publication_disposition",
+    "prospective_command_approval",
+    "scientific_equivalence_claimed",
+    "executed_inference_started_at_utc",
+    "reconciled_at_utc",
+    "reviewer_acknowledgement",
+    "canonical_argv_hash",
+    "plan_binding",
+    "ledger_binding",
+    "artifact_bindings",
+    "actual_iqtree",
+    "non_promoted_attempts",
+    "command_reconciliations"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "schema_path": {"const": "report/execution_reconciliation.schema.json"},
+    "analysis_id": {"const": "brca1-amniote-worked-example"},
+    "status": {
+      "enum": [
+        "pending-final-iqtree-artifacts",
+        "reconciled-post-hoc"
+      ]
+    },
+    "publication_disposition": {
+      "enum": [
+        "pending",
+        "accepted-with-post-hoc-protocol-deviation"
+      ]
+    },
+    "prospective_command_approval": {"const": false},
+    "scientific_equivalence_claimed": {"const": false},
+    "executed_inference_started_at_utc": {"type": "string", "format": "date-time"},
+    "reconciled_at_utc": {"type": ["string", "null"], "format": "date-time"},
+    "reviewer_acknowledgement": {"type": ["string", "null"]},
+    "canonical_argv_hash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "serialization"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "serialization": {
+          "const": "UTF-8 RFC 8259 JSON array with no insignificant whitespace and no trailing newline"
+        }
+      }
+    },
+    "plan_binding": {"$ref": "#/$defs/planBinding"},
+    "ledger_binding": {"$ref": "#/$defs/fileBinding"},
+    "artifact_bindings": {
+      "type": "object",
+      "minProperties": 6,
+      "additionalProperties": {"$ref": "#/$defs/fileBinding"}
+    },
+    "actual_iqtree": {"$ref": "#/$defs/actualIqtree"},
+    "non_promoted_attempts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/nonPromotedAttempt"}
+    },
+    "command_reconciliations": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/commandReconciliation"}
+    }
+  },
+  "$defs": {
+    "sha256OrNull": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256OrNull"}
+      }
+    },
+    "planBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "run_id",
+        "plan_hash",
+        "approval_receipt_path",
+        "approved_at_utc"
+      ],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "run_id": {"type": "string", "minLength": 1},
+        "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "approval_receipt_path": {"type": "string", "minLength": 1},
+        "approved_at_utc": {"type": "string", "format": "date-time"}
+      }
+    },
+    "actualIqtree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "launch_module_version",
+        "reported_version",
+        "started_at_utc",
+        "exit_code",
+        "wall_seconds",
+        "input_alignment_sha256",
+        "version_receipt",
+        "public_log",
+        "public_treefile",
+        "redactions_receipt",
+        "raw_output_receipt"
+      ],
+      "properties": {
+        "launch_module_version": {"const": "2.4.0"},
+        "reported_version": {"type": ["string", "null"]},
+        "started_at_utc": {"type": "string", "format": "date-time"},
+        "exit_code": {"const": 0},
+        "wall_seconds": {"type": "integer", "minimum": 0},
+        "input_alignment_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "version_receipt": {"$ref": "#/$defs/fileBinding"},
+        "public_log": {"$ref": "#/$defs/fileBinding"},
+        "public_treefile": {"$ref": "#/$defs/fileBinding"},
+        "redactions_receipt": {"$ref": "#/$defs/fileBinding"},
+        "raw_output_receipt": {"$ref": "#/$defs/fileBinding"}
+      }
+    },
+    "nonPromotedAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_id",
+        "tool",
+        "reported_module_version",
+        "started_at_utc",
+        "elapsed_description",
+        "exit_code",
+        "outcome",
+        "reason",
+        "promoted",
+        "promoted_output_count"
+      ],
+      "properties": {
+        "command_id": {"type": "string", "minLength": 1},
+        "tool": {"const": "iqtree3"},
+        "reported_module_version": {"const": "3.1.3"},
+        "started_at_utc": {"type": "string", "format": "date-time"},
+        "elapsed_description": {"type": "string", "minLength": 1},
+        "exit_code": {"const": 271},
+        "outcome": {"const": "canceled"},
+        "reason": {"type": "string", "minLength": 1},
+        "promoted": {"const": false},
+        "promoted_output_count": {"const": 0}
+      }
+    },
+    "difference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field",
+        "category",
+        "planned",
+        "executed",
+        "classification",
+        "potentially_result_affecting",
+        "explanation"
+      ],
+      "properties": {
+        "field": {"type": "string", "minLength": 1},
+        "category": {"type": "string", "minLength": 1},
+        "planned": {},
+        "executed": {},
+        "classification": {
+          "enum": [
+            "path-only-hash-bound",
+            "output-format-only",
+            "output-naming-only",
+            "potentially-result-affecting"
+          ]
+        },
+        "potentially_result_affecting": {"type": "boolean"},
+        "explanation": {"type": "string", "minLength": 1}
+      }
+    },
+    "commandReconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "planned_command_id",
+        "executed_command_id",
+        "planned_argv",
+        "planned_argv_sha256",
+        "executed_argv",
+        "executed_argv_sha256",
+        "exact_argv_match",
+        "prospectively_approved",
+        "potentially_result_affecting",
+        "scientific_parameters_unchanged",
+        "input_binding",
+        "output_binding",
+        "differences"
+      ],
+      "properties": {
+        "stage": {"type": "string", "minLength": 1},
+        "planned_command_id": {"type": "string", "minLength": 1},
+        "executed_command_id": {"type": "string", "minLength": 1},
+        "planned_argv": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "planned_argv_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "executed_argv": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "executed_argv_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "exact_argv_match": {"const": false},
+        "prospectively_approved": {"const": false},
+        "potentially_result_affecting": {"type": "boolean"},
+        "scientific_parameters_unchanged": {"type": "object"},
+        "input_binding": {"$ref": "#/$defs/fileBinding"},
+        "output_binding": {"$ref": "#/$defs/fileBinding"},
+        "differences": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/difference"}
+        }
+      }
+    }
+  }
+}
