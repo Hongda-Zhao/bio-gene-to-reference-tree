@@ -1,6 +1,5 @@
 # Gene-to-Reference Tree
 
-[![skills.sh installs](https://skills.sh/b/hongda-zhao/bio-gene-to-reference-tree)](https://skills.sh/hongda-zhao/bio-gene-to-reference-tree/bio-gene-to-reference-tree)
 [![Validation](https://github.com/Hongda-Zhao/bio-gene-to-reference-tree/actions/workflows/validate.yml/badge.svg)](https://github.com/Hongda-Zhao/bio-gene-to-reference-tree/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
