@@ -130,7 +130,11 @@ class SkillPackageTests(unittest.TestCase):
 
     def test_public_discovery_surfaces_are_documented(self) -> None:
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("https://skills.sh/b/hongda-zhao/bio-gene-to-reference-tree", readme)
+        self.assertIn(
+            "https://skills.sh/hongda-zhao/bio-gene-to-reference-tree/bio-gene-to-reference-tree",
+            readme,
+        )
+        self.assertNotIn("https://skills.sh/b/", readme)
         self.assertIn("actions/workflows/validate.yml/badge.svg", readme)
         self.assertIn("npx skills add Hongda-Zhao/bio-gene-to-reference-tree", readme)
         self.assertIn("https://agentskills.io/specification", readme)
