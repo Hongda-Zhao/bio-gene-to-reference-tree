@@ -1,6 +1,5 @@
 # Gene-to-Reference Tree
 
-[![skills.sh installs](https://skills.sh/b/hongda-zhao/bio-gene-to-reference-tree)](https://skills.sh/hongda-zhao/bio-gene-to-reference-tree/bio-gene-to-reference-tree)
 [![Validation](https://github.com/Hongda-Zhao/bio-gene-to-reference-tree/actions/workflows/validate.yml/badge.svg)](https://github.com/Hongda-Zhao/bio-gene-to-reference-tree/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -199,6 +198,8 @@ The workflow supports:
 | Full sequence metadata | Yes | Generates TSV | — |
 | Recent phylogenetic evidence | Yes | Emits search plan only | Literature/taxonomy access required |
 | Network-free review bundle | Yes | Fully implemented | Python 3.10+; CI-tested on 3.10 and 3.12 |
+
+The bundled [three-year MSA and trimming evidence catalog](skills/bio-gene-to-reference-tree/references/recent-msa-trimming-evidence.md) links every workflow to its full Methods source and preserves exact, partial, explicit-no-trim, and not-reported states instead of guessing missing parameters.
 
 ## Repository layout
 

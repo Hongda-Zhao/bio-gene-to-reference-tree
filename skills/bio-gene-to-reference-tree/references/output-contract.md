@@ -161,6 +161,16 @@ inference_method, model, topology_claim, directness,
 conflicts, limitations, source_url, retrieved_at
 ```
 
+When a retrieved paper informs MSA or trimming choices, append these optional backward-compatible fields:
+
+```text
+alignment_method, alignment_version, alignment_parameters, alignment_reporting_status,
+trimming_method, trimming_version, trimming_parameters, trimming_status,
+retained_sites_or_fraction
+```
+
+Preserve exact, partial, explicit-none, and not-reported states. Never turn an unreported method into an explicit no-trim decision or infer an exact CLI flag from prose without recording that derivation.
+
 ## Failure semantics
 
 - Exit non-zero on malformed JSON/TSV/FASTA, missing sequence matches, duplicate IDs, invalid values, unresolved query handoff, insufficient taxa/sequences, missing required outgroup/rationale, pending required clustering, or an existing output directory.

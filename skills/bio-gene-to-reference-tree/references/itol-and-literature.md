@@ -89,6 +89,8 @@ Search in this order:
 
 Prioritize direct taxonomic relevance, data scale, method transparency, and current recognized taxonomy before journal prestige. A recent high-impact article that does not sample the relevant lineage is weaker evidence than a directly relevant rigorous study.
 
+For alignment and post-alignment precedents, start with [recent-msa-trimming-evidence.md](recent-msa-trimming-evidence.md), then re-retrieve and verify any candidate source because that catalog is a dated snapshot rather than live evidence.
+
 For viruses, include current ICTV taxonomy and gene/segment-specific studies. Do not infer a virus species relationship from one recombinant or reassorted segment without qualification.
 
 ## Literature evidence table
@@ -101,6 +103,16 @@ taxon_rank, taxa_covered, evidence_type, data_type,
 inference_method, model, topology_claim, directness,
 conflicts, limitations, source_url, retrieved_at
 ```
+
+When a paper is also used to justify alignment or trimming, append these optional fields without changing older evidence rows:
+
+```text
+alignment_method, alignment_version, alignment_parameters, alignment_reporting_status,
+trimming_method, trimming_version, trimming_parameters, trimming_status,
+retained_sites_or_fraction
+```
+
+Use `alignment_reporting_status` for exact or partial reporting. Use `trimming_status` to preserve exact, partial, explicit-none, and not-reported states. Do not fill an absent parameter from another paper or from a tool default that may have changed.
 
 Label `directness` as exact-species, genus, family, order, broader, or taxonomy-only. Include stable DOI/PMID links where available. Keep paraphrased topology claims concise and distinguish author conclusions from workflow inference.
 

@@ -77,6 +77,8 @@ Keep the representative/member mapping, annotate `cluster_id`, and re-run refere
 
 ### 6. Align and inspect
 
+First confirm that the approved inputs are homologous protein sequences for one gene or protein family. Codon matrices, target-capture loci, concatenated ortholog sets, pangenome core alignments, and reference-mapped SNP pseudoalignments are different data architectures. Use their catalog rows only as contextual evidence; route nucleotide or genome-scale material to a purpose-specific workflow instead of silently applying this protein MAFFT/trimAl path.
+
 Use MAFFT and choose the mode from sequence count and architecture, not divergence alone:
 
 - `auto` for general routing;
@@ -86,11 +88,15 @@ Use MAFFT and choose the mode from sequence count and architecture, not divergen
 
 Inspect coverage, gap fraction, occupancy, conserved motifs, mixed domains, fragments, fusions, duplicate tip IDs, and suspicious long branches. Preserve `alignment.raw.faa`. Read [alignment-and-tree.md](references/alignment-and-tree.md) before choosing or running MAFFT, trimAl, FastTree, or IQ-TREE2.
 
+When recent literature is used to choose or justify an alignment strategy, read [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md) and filter its companion [TSV catalog](references/recent-msa-trimming-evidence.tsv) by molecule, gene or marker architecture, dataset scale, and taxonomic depth. Treat matching rows as precedents to verify at the source, never as automatic defaults.
+
 ### 7. Treat trimming as a sensitivity analysis
 
 Use trimAl profiles with explicit `-gt` semantics. A value of `0.98` is extremely strict; `0.10` or `0.05` is extremely permissive. Never infer a threshold solely from “close,” “distant,” or “viral.”
 
 Retain each profile, report columns removed and retained fraction, verify conserved regions, and compare key topology when profiles differ. Stop if trimming removes too much information or changes the biological conclusion. Obtain **alignment/trimming approval** before tree inference.
+
+Keep `not-reported` distinct from `explicit-none` when extracting published methods. Never invent an unreported version, mode, threshold, or CLI translation. Treat `exact` as a reporting-provenance state, not proof that an article interpreted the option correctly; verify decision-bearing flags against the reported tool version and expose any prose-versus-argv conflict before execution.
 
 ### 8. Infer and label support correctly
 
@@ -151,6 +157,8 @@ Do not fabricate a lookup result, sequence, TaxID, orthology call, citation, too
 - [tool-routing.md](references/tool-routing.md): authoritative databases, search tiers, and executable boundaries.
 - [reference-selection.md](references/reference-selection.md): selection, clustering, taxonomic balance, outgroups, and reason codes.
 - [alignment-and-tree.md](references/alignment-and-tree.md): MAFFT, trimAl, FastTree, IQ-TREE2, QC, and support semantics.
+- [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md): a recent-literature routing guide, reporting-state semantics, and refresh protocol.
+- [recent-msa-trimming-evidence.tsv](references/recent-msa-trimming-evidence.tsv): machine-readable 2023-08-24 to 2026-08-24 MSA and post-alignment evidence, one row per analysis workflow.
 - [itol-and-literature.md](references/itol-and-literature.md): iTOL files, metadata, evidence search, and gene-tree/species-tree comparison.
 - [ggtree-visualization.md](references/ggtree-visualization.md): local ggtree/ggplot2 rendering, exact tip joins, support semantics, and vector exports.
 - [workflow.md](references/workflow.md): states, gates, failure conditions, and viral branch.

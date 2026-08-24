@@ -2,6 +2,29 @@
 
 Treat the alignment as a biological homology hypothesis. A tree inference program will fit misaligned columns confidently, so stop before inference when the MSA is not defensible.
 
+## Contents
+
+- [Confirm the alignment architecture](#confirm-the-alignment-architecture)
+- [MAFFT routing](#mafft-routing)
+- [Raw-alignment QC](#raw-alignment-qc)
+- [trimAl semantics](#trimal-semantics)
+- [Fast exploratory inference](#fast-exploratory-inference)
+- [IQ-TREE2 accurate inference](#iq-tree2-accurate-inference)
+- [Rooting and topology checks](#rooting-and-topology-checks)
+- [Required records](#required-records)
+- [Primary documentation](#primary-documentation)
+
+## Confirm the alignment architecture
+
+This Skill accepts homologous protein sequences for a gene tree. Do not treat every rectangular character matrix as the same kind of MSA:
+
+- a protein or protein-family MSA represents residue-level homology and can follow the MAFFT route below;
+- a protein-guided codon alignment must preserve complete codons during any filtering;
+- a concatenated core-gene or target-capture matrix needs locus-level partition, occupancy, and gene-tree checks;
+- a reference-mapped SNP pseudoalignment is a set of variant calls against one coordinate system, not a de novo homology alignment.
+
+For a SNP pseudoalignment, record the reference genome, callable/core threshold, depth and allele filters, repeat and recombination masks, invariant-site handling, and any ascertainment correction. Do not add MAFFT or trimAl merely to make that workflow resemble a protein MSA. Route genome-scale material to a genome phylogeny workflow.
+
 ## MAFFT routing
 
 | Mode | Arguments | Use |
@@ -12,6 +35,8 @@ Treat the alignment as a biological homology hypothesis. A tree inference progra
 | E-INS-i | `--genafpair --maxiterate 1000` | Shared motif order with long insertions or long unalignable regions |
 
 Record a fixed thread count and exact MAFFT version. Route primarily by sequence count and domain architecture, not a close/distant label alone.
+
+When literature precedent is material to the choice, use [recent-msa-trimming-evidence.md](recent-msa-trimming-evidence.md) and its TSV catalog. Match data architecture before broad taxonomy, re-check the source, and do not promote an observed workflow into a default.
 
 ## Raw-alignment QC
 
@@ -35,6 +60,8 @@ Use `trimal -gt x` as a minimum non-gap occupancy threshold. For example, `-gt 0
 - `0.10` and `0.05` are extremely permissive and may retain noise.
 
 Treat proposed values such as `0.98/0.95/0.90` or `0.10/0.05` as named sensitivity profiles, not automatic biological truths. Preserve every profile, record retained columns and retained fraction, and verify key motifs. Require review when the primary topology changes across reasonable profiles.
+
+Published methods may report exact software parameters, partial parameters, an explicit untrimmed analysis, or no trimming information. Preserve those states separately; “not reported” never means “no trimming.” Exact reporting does not validate an author's interpretation of a flag. If prose, argv, and official version-matched semantics conflict, preserve the reported argv, label the conflict, keep any derived correction separate, and require approval before reproducing or correcting it.
 
 Example argument array:
 
