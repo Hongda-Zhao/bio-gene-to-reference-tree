@@ -236,6 +236,7 @@ class SkillPackageTests(unittest.TestCase):
                 "## What it does",
                 "## Install",
                 "## Progressive Skill",
+                "## Nucleotide quick start",
                 "## BRCA1 example",
                 "## Quick links",
             ),
@@ -273,20 +274,29 @@ class SkillPackageTests(unittest.TestCase):
             "assets/candidates.example.tsv",
             "assets/conservation-assessment.example.tsv",
             "assets/environment-profile.example.json",
+            "assets/request.nucleotide.example.json",
+            "assets/query.nucleotide.example.fna",
+            "assets/candidates.nucleotide.example.fna",
+            "assets/candidates.nucleotide.example.tsv",
             "references/workflow.md",
             "references/output-contract.md",
             "references/tool-routing.md",
             "references/environment-routing.md",
+            "references/sequence-type-routing.md",
             "references/environment-profile-0.1.schema.json",
+            "references/environment-profile-0.2.schema.json",
             "references/environment-snapshot-0.1.schema.json",
             "references/route-decision-0.1.schema.json",
+            "references/route-decision-0.2.schema.json",
             "references/taxonomy-resolution.md",
             "references/recent-msa-trimming-evidence.md",
             "references/recent-msa-trimming-evidence.tsv",
             "references/ggtree-visualization.md",
             "references/request-0.2.schema.json",
+            "references/request-0.3.schema.json",
             "references/plan-0.2.schema.json",
             "references/plan-0.3.schema.json",
+            "references/plan-0.4.schema.json",
             "agents/openai.yaml",
             "LICENSE",
         }
@@ -571,22 +581,57 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn(expected_header, contract)
         self.assertNotIn("analysis_unit, conservation_class", contract)
 
-    def test_v03_workflow_and_v02_schema_surfaces_are_synchronized(self) -> None:
+    def test_v04_workflow_and_current_schema_surfaces_are_synchronized(self) -> None:
         script = (SKILL_ROOT / "scripts" / "gene_to_tree.py").read_text(encoding="utf-8")
-        request = json.loads((SKILL_ROOT / "assets" / "request.example.json").read_text(encoding="utf-8"))
+        protein_request = json.loads(
+            (SKILL_ROOT / "assets" / "request.example.json").read_text(encoding="utf-8")
+        )
+        nucleotide_request = json.loads(
+            (SKILL_ROOT / "assets" / "request.nucleotide.example.json").read_text(
+                encoding="utf-8"
+            )
+        )
 
-        self.assertIn('VERSION = "0.3.0"', script)
-        self.assertIn('OUTPUT_SCHEMA_VERSION = "0.3"', script)
-        self.assertEqual(request["schema_version"], "0.2")
+        self.assertIn('VERSION = "0.4.0"', script)
+        self.assertIn('OUTPUT_SCHEMA_VERSION = "0.4"', script)
+        self.assertIn('ENVIRONMENT_PROFILE_SCHEMA_VERSION = "0.2"', script)
+        self.assertIn('ROUTE_DECISION_SCHEMA_VERSION = "0.2"', script)
+        self.assertEqual(protein_request["schema_version"], "0.2")
+        self.assertEqual(nucleotide_request["schema_version"], "0.3")
 
-        request_schema = json.loads(
+        legacy_request_schema = json.loads(
             (SKILL_ROOT / "references" / "request-0.2.schema.json").read_text(encoding="utf-8")
         )
-        plan_schema = json.loads(
+        current_request_schema = json.loads(
+            (SKILL_ROOT / "references" / "request-0.3.schema.json").read_text(encoding="utf-8")
+        )
+        current_plan_schema = json.loads(
+            (SKILL_ROOT / "references" / "plan-0.4.schema.json").read_text(encoding="utf-8")
+        )
+        current_environment_schema = json.loads(
+            (SKILL_ROOT / "references" / "environment-profile-0.2.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        current_route_schema = json.loads(
+            (SKILL_ROOT / "references" / "route-decision-0.2.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        legacy_plan_schema = json.loads(
             (SKILL_ROOT / "references" / "plan-0.3.schema.json").read_text(encoding="utf-8")
         )
-        self.assertIn("taxonomy", request_schema["properties"])
-        self.assertIn("taxonomy_plan", plan_schema["required"])
+        self.assertIn("taxonomy", legacy_request_schema["properties"])
+        self.assertIn("molecule", current_request_schema["required"])
+        self.assertIn("molecule_plan", current_plan_schema["required"])
+        self.assertEqual(
+            current_environment_schema["properties"]["schema_version"]["const"],
+            "0.2",
+        )
+        self.assertEqual(
+            current_route_schema["properties"]["schema_version"]["const"], "0.2"
+        )
+        self.assertIn("taxonomy_plan", legacy_plan_schema["required"])
 
     def test_portable_bundle_copies_to_codex_cursor_and_claude_paths(self) -> None:
         source_files = {

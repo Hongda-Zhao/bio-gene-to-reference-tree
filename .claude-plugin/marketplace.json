@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "bio-gene-to-reference-tree",
-      "description": "Build an auditable protein gene tree from an accession, sequence, or protein or gene name plus source organism",
+      "description": "Build an auditable protein or nucleotide gene tree from an accession, declared sequence, or gene, protein, or feature name plus source organism",
       "source": "./",
       "strict": false,
       "skills": [

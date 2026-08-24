@@ -19,13 +19,20 @@ SCRIPT = SKILL_ROOT / "scripts" / "gene_to_tree.py"
 TOOL_NAMES = (
     "ncbi-datasets",
     "blastp",
+    "blastn",
+    "blastx",
+    "tblastn",
+    "tblastx",
     "interproscan",
     "jackhmmer",
     "hhsearch",
     "foldseek",
     "mmseqs2",
     "mafft",
+    "mafft-qinsi",
     "trimal",
+    "pal2nal",
+    "macse",
     "fasttree",
     "iqtree2",
     "iqtree3",
@@ -55,7 +62,7 @@ def _snapshot(
 ) -> dict[str, Any]:
     return {
         "schema_version": "0.1",
-        "workflow_version": "0.3.0",
+        "workflow_version": "0.4.0",
         "environment_id": f"test-{kind}",
         "environment_kind": kind,
         "probe_scope": "current-process-environment",
@@ -141,6 +148,80 @@ def _profile() -> dict[str, Any]:
             "clustering_trigger": 200,
         },
     }
+
+
+def _profile_v02(
+    molecule: str = "protein",
+    *,
+    analysis_kind: str | None = None,
+    coding_status: str | None = None,
+    genetic_code: int | None = None,
+) -> dict[str, Any]:
+    """Return a current profile while preserving the legacy fixture separately."""
+    profile = _profile()
+    profile["schema_version"] = "0.2"
+    if molecule == "protein":
+        resolved_analysis = analysis_kind or "protein"
+        resolved_coding_status = coding_status or "not-applicable"
+        alignment_strategy = "mafft-protein"
+        trimming_strategy = "trimal-columns"
+    elif molecule in {"noncoding-dna", "noncoding-rna"}:
+        resolved_analysis = analysis_kind or "nucleotide"
+        resolved_coding_status = coding_status or "not-applicable"
+        alignment_strategy = "mafft-nucleotide"
+        trimming_strategy = "trimal-columns"
+    elif molecule in {"coding-dna", "coding-rna"}:
+        resolved_analysis = analysis_kind or "codon"
+        resolved_coding_status = coding_status or "clean"
+        genetic_code = 1 if genetic_code is None else genetic_code
+        alignment_strategy = "translate-mafft-backtranslate"
+        trimming_strategy = "protein-mask-to-codons"
+    else:
+        resolved_analysis = analysis_kind or "auto"
+        resolved_coding_status = coding_status or "unknown"
+        alignment_strategy = "auto"
+        trimming_strategy = "none"
+        profile["requirements"]["trimming"] = False
+
+    profile["inputs"].update(
+        {
+            "query_molecule": molecule,
+            "candidates_molecule": molecule,
+            "candidate_bundle_kind": (
+                "protein-fasta-metadata"
+                if molecule == "protein"
+                else (
+                    "noncoding-nucleotide-fasta-metadata"
+                    if molecule in {"noncoding-dna", "noncoding-rna"}
+                    else (
+                        "clean-cds-translations-metadata"
+                        if molecule in {"coding-dna", "coding-rna"}
+                        and resolved_coding_status == "clean"
+                        else (
+                            "disrupted-cds-metadata"
+                            if molecule in {"coding-dna", "coding-rna"}
+                            and resolved_coding_status == "disrupted"
+                            else "unknown"
+                        )
+                    )
+                )
+            ),
+            "alignment_kind": "absent",
+            "tree_data_kind": "absent",
+            "sequence_database_molecule": "none",
+        }
+    )
+    profile["requirements"].update(
+        {
+            "analysis_kind": resolved_analysis,
+            "genetic_code": genetic_code,
+            "coding_status": resolved_coding_status,
+            "alignment_strategy": alignment_strategy,
+            "trimming_strategy": trimming_strategy,
+            "rna_structure_aware": False,
+        }
+    )
+    return profile
 
 
 class EnvironmentRoutingTests(unittest.TestCase):
@@ -303,7 +384,7 @@ class EnvironmentRoutingTests(unittest.TestCase):
             }
         )
         completed, decision = self._route(
-            profile, _snapshot("trimal", "iqtree2")
+            profile, _snapshot("mafft", "trimal", "iqtree2")
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         assert decision is not None
@@ -313,6 +394,8 @@ class EnvironmentRoutingTests(unittest.TestCase):
             self._stage(decision, 6)["reason_code"],
             "ALIGNMENT_ALREADY_MATERIALIZED",
         )
+        self.assertEqual(decision["selected_alignment_route"], "existing-alignment")
+        self.assertNotIn("mafft", decision["used_tools"])
 
     def test_existing_alignment_bypasses_obsolete_clustering_trigger(self) -> None:
         profile = _profile()
@@ -871,6 +954,42 @@ class EnvironmentRoutingTests(unittest.TestCase):
         self.assertIsNone(decision)
         self.assertIn("INVALID_ENVIRONMENT_PROFILE", completed.stderr)
 
+    def test_required_nullable_profile_fields_cannot_be_omitted(self) -> None:
+        for schema_version in ("0.1", "0.2"):
+            with self.subTest(schema=schema_version, field="candidate_count"):
+                profile = _profile() if schema_version == "0.1" else _profile_v02()
+                del profile["inputs"]["candidate_count"]
+                completed, decision = self._route(profile, _snapshot())
+                self.assertEqual(completed.returncode, 2)
+                self.assertIsNone(decision)
+                self.assertIn("candidate_count is required", completed.stderr)
+            with self.subTest(schema=schema_version, field="memory_gb"):
+                profile = _profile() if schema_version == "0.1" else _profile_v02()
+                del profile["compute"]["memory_gb"]
+                completed, decision = self._route(profile, _snapshot())
+                self.assertEqual(completed.returncode, 2)
+                self.assertIsNone(decision)
+                self.assertIn("memory_gb is required", completed.stderr)
+
+    def test_current_profile_enum_values_are_not_silently_trimmed(self) -> None:
+        for name, mutate in (
+            ("profile-id", lambda value: value.update({"profile_id": " test-profile "})),
+            ("intent", lambda value: value.update({"intent": " accurate "})),
+            (
+                "query-kind",
+                lambda value: value["inputs"].update(
+                    {"query_kind": " public-sequence "}
+                ),
+            ),
+        ):
+            with self.subTest(field=name):
+                profile = _profile_v02()
+                mutate(profile)
+                completed, decision = self._route(profile, _snapshot())
+                self.assertEqual(completed.returncode, 2)
+                self.assertIsNone(decision)
+                self.assertIn("leading or trailing whitespace", completed.stderr)
+
     def test_imported_snapshot_rejects_extra_fields_and_private_paths(self) -> None:
         profile = _profile()
         snapshot = _snapshot("mafft", "trimal", "iqtree2")
@@ -926,6 +1045,263 @@ class EnvironmentRoutingTests(unittest.TestCase):
         assert third is not None
         self.assertNotEqual(first["route_hash"], third["route_hash"])
 
+    def test_legacy_profile_remains_an_explicit_protein_route(self) -> None:
+        completed, decision = self._route(
+            _profile(), _snapshot("mafft", "trimal", "iqtree2")
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        assert decision is not None
+        self.assertEqual(decision["schema_version"], "0.2")
+        self.assertEqual(decision["source_profile_schema_version"], "0.1")
+        self.assertEqual(decision["resolved_query_molecule"], "protein")
+        self.assertEqual(decision["selected_analysis_kind"], "protein")
+        self.assertEqual(decision["selected_alignment_route"], "mafft-protein")
+
+    def test_noncoding_dna_uses_blastn_and_nucleotide_alignment(self) -> None:
+        profile = _profile_v02("noncoding-dna")
+        profile["inputs"].update(
+            {
+                "candidates_location": "absent",
+                "candidates_molecule": "absent",
+                "candidate_bundle_kind": "absent",
+                "sequence_database_location": "compute-target",
+                "sequence_database_format": "blast",
+                "sequence_database_molecule": "nucleotide",
+            }
+        )
+        completed, decision = self._route(
+            profile, _snapshot("blastn", "mafft", "trimal", "iqtree2")
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        assert decision is not None
+        self.assertEqual(decision["status"], "ready")
+        self.assertEqual(decision["selected_search_mode"], "nucleotide-nucleotide")
+        self.assertEqual(decision["selected_analysis_kind"], "nucleotide")
+        self.assertEqual(decision["selected_alignment_route"], "mafft-nucleotide")
+        self.assertEqual(self._stage(decision, 3)["route"], "local-sequence-database")
+        self.assertEqual(self._stage(decision, 6)["reason_code"], "NUCLEOTIDE_MSA_AVAILABLE")
+        self.assertIn("blastn", decision["used_tools"])
+        self.assertNotIn("blastp", decision["used_tools"])
+
+    def test_nucleotide_query_rejects_a_protein_database_route(self) -> None:
+        profile = _profile_v02("noncoding-dna")
+        profile["inputs"].update(
+            {
+                "candidates_location": "absent",
+                "candidates_molecule": "absent",
+                "candidate_bundle_kind": "absent",
+                "sequence_database_location": "compute-target",
+                "sequence_database_format": "blast",
+                "sequence_database_molecule": "protein",
+            }
+        )
+        completed, decision = self._route(
+            profile, _snapshot("blastp", "mafft", "trimal", "iqtree2")
+        )
+        self.assertEqual(completed.returncode, 2)
+        assert decision is not None
+        self.assertEqual(decision["status"], "blocked")
+        self.assertEqual(decision["selected_search_mode"], "none")
+        self.assertIn("SEQUENCE_DATABASE_MOLECULE_MISMATCH", decision["warnings"])
+        self.assertEqual(
+            self._stage(decision, 3)["reason_code"],
+            "CANDIDATE_DISCOVERY_CAPABILITY_MISSING",
+        )
+        self.assertNotIn("blastp", decision["used_tools"])
+
+    def test_clean_cds_selects_protein_alignment_and_codon_backtranslation(self) -> None:
+        profile = _profile_v02("coding-dna", genetic_code=11)
+        completed, decision = self._route(
+            profile, _snapshot("mafft", "trimal", "iqtree2")
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        assert decision is not None
+        self.assertEqual(decision["status"], "ready")
+        self.assertEqual(decision["selected_analysis_kind"], "codon")
+        self.assertEqual(decision["selected_tree_data_kind"], "codon")
+        self.assertEqual(decision["genetic_code"], 11)
+        self.assertEqual(
+            decision["selected_alignment_route"],
+            "translate-mafft-trimal-backtranslate",
+        )
+        self.assertEqual(self._stage(decision, 6)["reason_code"], "CODON_ALIGNMENT_AVAILABLE")
+        self.assertEqual(
+            self._stage(decision, 7)["reason_code"],
+            "CODON_SAFE_TRIMMING_AVAILABLE",
+        )
+        operations = {item["operation"] for item in decision["transformations"]}
+        self.assertEqual(
+            operations,
+            {"validate-and-use-cds-translations", "backtranslate-protein-alignment"},
+        )
+
+    def test_disrupted_cds_requires_and_selects_macse_without_silent_mafft(self) -> None:
+        profile = _profile_v02(
+            "coding-dna", coding_status="disrupted", genetic_code=11
+        )
+        profile["requirements"].update(
+            {
+                "trimming": False,
+                "alignment_strategy": "macse",
+                "trimming_strategy": "none",
+            }
+        )
+        completed, decision = self._route(
+            profile, _snapshot("mafft", "macse", "iqtree2")
+        )
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        assert decision is not None
+        self.assertEqual(decision["status"], "blocked")
+        self.assertEqual(decision["selected_alignment_route"], "macse-codon-aware")
+        self.assertEqual(self._stage(decision, 6)["status"], "conditional")
+        self.assertEqual(self._stage(decision, 6)["reason_code"], "MACSE_REVIEW_REQUIRED")
+        self.assertEqual(
+            self._stage(decision, 7)["reason_code"],
+            "MACSE_EXPORT_POLICY_REQUIRED",
+        )
+        self.assertEqual(self._stage(decision, 8)["status"], "blocked")
+        self.assertEqual(
+            self._stage(decision, 8)["reason_code"],
+            "UPSTREAM_ALIGNMENT_CAPABILITY_MISSING",
+        )
+        self.assertIn("macse", decision["used_tools"])
+        self.assertNotIn("mafft", decision["used_tools"])
+        self.assertEqual(
+            decision["transformations"],
+            [
+                {
+                    "operation": "export-macse-frameshift-symbols",
+                    "status": "review-required",
+                    "reason_code": "MACSE_EXPORT_POLICY_REQUIRED",
+                }
+            ],
+        )
+
+    def test_structure_aware_rna_requires_the_dedicated_qinsi_executable(self) -> None:
+        profile = _profile_v02("noncoding-rna")
+        profile["requirements"]["rna_structure_aware"] = True
+
+        missing, decision = self._route(
+            profile, _snapshot("mafft", "trimal", "iqtree2")
+        )
+        self.assertEqual(missing.returncode, 2)
+        assert decision is not None
+        self.assertIsNone(decision["selected_alignment_route"])
+        self.assertEqual(
+            self._stage(decision, 6)["reason_code"], "MAFFT_QINSI_REQUIRED"
+        )
+        self.assertNotIn("mafft", decision["used_tools"])
+
+        ready, decision = self._route(
+            profile, _snapshot("mafft-qinsi", "trimal", "iqtree2")
+        )
+        self.assertEqual(ready.returncode, 0, ready.stderr)
+        assert decision is not None
+        self.assertEqual(decision["selected_alignment_route"], "mafft-qinsi")
+        self.assertEqual(
+            self._stage(decision, 6)["reason_code"],
+            "RNA_STRUCTURE_MSA_AVAILABLE",
+        )
+        self.assertIn("mafft-qinsi", decision["used_tools"])
+        self.assertNotIn("mafft", decision["used_tools"])
+
+    def test_precomputed_alignment_request_blocks_when_artifact_is_absent(self) -> None:
+        profile = _profile_v02("noncoding-dna")
+        profile["requirements"]["alignment_strategy"] = "precomputed"
+        completed, decision = self._route(
+            profile, _snapshot("mafft", "trimal", "iqtree2")
+        )
+        self.assertEqual(completed.returncode, 2)
+        assert decision is not None
+        self.assertIsNone(decision["selected_alignment_route"])
+        self.assertEqual(
+            self._stage(decision, 6)["reason_code"],
+            "PRECOMPUTED_ALIGNMENT_REQUIRED",
+        )
+
+    def test_coding_nucleotide_analysis_keeps_codon_alignment_but_uses_dna_tree(self) -> None:
+        profile = _profile_v02(
+            "coding-dna", analysis_kind="nucleotide", genetic_code=11
+        )
+        completed, decision = self._route(
+            profile, _snapshot("mafft", "trimal", "iqtree2")
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        assert decision is not None
+        self.assertEqual(decision["selected_alignment_kind"], "codon")
+        self.assertEqual(decision["selected_tree_data_kind"], "nucleotide")
+        self.assertEqual(decision["selected_tree_model_family"], "nucleotide")
+        self.assertEqual(
+            decision["selected_alignment_route"],
+            "translate-mafft-trimal-backtranslate",
+        )
+
+    def test_candidate_bundle_kind_must_match_the_declared_molecule(self) -> None:
+        profile = _profile_v02("coding-dna", genetic_code=11)
+        profile["inputs"]["candidate_bundle_kind"] = (
+            "noncoding-nucleotide-fasta-metadata"
+        )
+        completed, decision = self._route(
+            profile, _snapshot("mafft", "trimal", "iqtree2")
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIsNone(decision)
+        self.assertIn("INVALID_ENVIRONMENT_PROFILE", completed.stderr)
+
+    def test_fasttree_codon_route_fails_closed(self) -> None:
+        profile = _profile_v02("coding-dna", genetic_code=11)
+        profile["intent"] = "quick"
+        completed, decision = self._route(
+            profile, _snapshot("mafft", "trimal", "fasttree")
+        )
+        self.assertEqual(completed.returncode, 2)
+        assert decision is not None
+        self.assertEqual(decision["selected_tree_mode"], "quick")
+        self.assertEqual(
+            self._stage(decision, 8)["reason_code"],
+            "FASTTREE_CODON_MODEL_UNAVAILABLE",
+        )
+        self.assertNotIn("fasttree", decision["used_tools"])
+
+    def test_unknown_molecule_blocks_before_alignment_selection(self) -> None:
+        profile = _profile_v02("unknown")
+        completed, decision = self._route(
+            profile, _snapshot("blastp", "blastn", "mafft", "trimal", "iqtree2")
+        )
+        self.assertEqual(completed.returncode, 2)
+        assert decision is not None
+        self.assertEqual(decision["status"], "blocked")
+        self.assertEqual(decision["resolved_query_molecule"], "unknown")
+        self.assertEqual(decision["selected_analysis_kind"], "unknown")
+        self.assertEqual(decision["selected_alignment_kind"], "unknown")
+        self.assertIsNone(decision["selected_alignment_route"])
+        self.assertEqual(
+            self._stage(decision, 1)["reason_code"],
+            "MOLECULE_CLASSIFICATION_REQUIRED",
+        )
+        self.assertEqual(self._stage(decision, 6)["status"], "blocked")
+
+    def test_route_hash_changes_with_molecule_and_genetic_code(self) -> None:
+        tools = _snapshot("mafft", "trimal", "iqtree2")
+        dna_completed, dna = self._route(_profile_v02("noncoding-dna"), tools)
+        rna_completed, rna = self._route(_profile_v02("noncoding-rna"), tools)
+        code1_completed, code1 = self._route(
+            _profile_v02("coding-dna", genetic_code=1), tools
+        )
+        code11_completed, code11 = self._route(
+            _profile_v02("coding-dna", genetic_code=11), tools
+        )
+        self.assertEqual(
+            (dna_completed.returncode, rna_completed.returncode), (0, 0)
+        )
+        self.assertEqual(
+            (code1_completed.returncode, code11_completed.returncode), (0, 0)
+        )
+        assert dna is not None and rna is not None
+        assert code1 is not None and code11 is not None
+        self.assertNotEqual(dna["route_hash"], rna["route_hash"])
+        self.assertNotEqual(code1["route_hash"], code11["route_hash"])
+
     def test_blocked_route_is_written_and_existing_output_is_refused(self) -> None:
         output = self.temp_root / "route.json"
         completed, decision = self._route(
@@ -978,6 +1354,11 @@ class EnvironmentRoutingTests(unittest.TestCase):
         self.assertEqual(snapshot["environment"]["python_version"], sys.version.split()[0])
         self.assertEqual(set(snapshot["r_packages"]), set(R_PACKAGES))
         self.assertEqual(set(snapshot["executors"]), {"ssh", "slurm", "pbs", "lsf"})
+        self.assertEqual(set(snapshot["tools"]), set(TOOL_NAMES))
+        self.assertTrue(
+            {"blastn", "blastx", "tblastn", "tblastx", "pal2nal", "macse"}
+            <= set(snapshot["tools"])
+        )
         self.assertTrue(all(item["status"] == "missing" for item in snapshot["tools"].values()))
         self.assertNotIn(str(Path.home()), completed.stdout)
 
@@ -1042,17 +1423,51 @@ class EnvironmentRoutingTests(unittest.TestCase):
         self.assertEqual(snapshot["tools"]["blastp"]["status"], "probe-failed")
         self.assertNotIn("private", completed.stdout)
 
+    @unittest.skipIf(os.name == "nt", "POSIX wrapper fixture; routing is tested on Windows")
+    def test_active_doctor_accepts_official_mafft_version_only_output(self) -> None:
+        for executable_name in ("mafft", "mafft-qinsi"):
+            executable = self.temp_root / executable_name
+            executable.write_text(
+                "#!/bin/sh\necho 'v7.526 (2024/Apr/22)'\n", encoding="utf-8"
+            )
+            executable.chmod(0o755)
+        environment = os.environ.copy()
+        environment["PATH"] = str(self.temp_root)
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "doctor",
+                "--run-version-probes",
+                "--json",
+            ],
+            cwd=self.temp_root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        snapshot = json.loads(completed.stdout)
+        for name in ("mafft", "mafft-qinsi"):
+            with self.subTest(tool=name):
+                self.assertEqual(snapshot["tools"][name]["status"], "available")
+                self.assertEqual(snapshot["tools"][name]["version"], "7.526")
+
     def test_environment_schemas_and_example_are_valid_json(self) -> None:
         profile = json.loads(
             (SKILL_ROOT / "assets" / "environment-profile.example.json").read_text(
                 encoding="utf-8"
             )
         )
-        self.assertEqual(profile["schema_version"], "0.1")
+        self.assertEqual(profile["schema_version"], "0.2")
         for name in (
             "environment-profile-0.1.schema.json",
+            "environment-profile-0.2.schema.json",
             "environment-snapshot-0.1.schema.json",
             "route-decision-0.1.schema.json",
+            "route-decision-0.2.schema.json",
         ):
             schema = json.loads((SKILL_ROOT / "references" / name).read_text(encoding="utf-8"))
             self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")

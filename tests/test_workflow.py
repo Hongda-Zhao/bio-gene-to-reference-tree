@@ -672,7 +672,7 @@ class OfflineWorkflowContractTests(unittest.TestCase):
         second_plan = json.loads((second / "plan.json").read_text(encoding="utf-8"))
         self.assertNotEqual(first_plan["plan_hash"], second_plan["plan_hash"])
 
-    def test_additional_study_sequence_is_preserved_outside_reference_quotas(self) -> None:
+    def test_additional_study_sequence_is_preserved_inside_reference_cap(self) -> None:
         rows = _read_tsv(ASSETS / "candidates.example.tsv")
         table_path = self.temp_root / "multiple study.tsv"
         with table_path.open("w", encoding="utf-8", newline="") as handle:
@@ -692,12 +692,51 @@ class OfflineWorkflowContractTests(unittest.TestCase):
         output = self._successful_plan(request_path, out=self.temp_root / "multiple-study")
         selected = {row["accession"]: row for row in _read_tsv(output / "selected_references.tsv")}
         self.assertIn("MOUSE_ALT", selected)
-        self.assertIn("MOUSE_CAN", selected)
+        self.assertEqual(len(selected) - 1, 3)
         self.assertEqual(selected["MOUSE_ALT"]["decision_reason"], "SELECTED_STUDY")
         itol = (output / "itol_roles.txt").read_text(encoding="utf-8")
         self.assertIn("MOUSE_ALT\t#E69F00\tStudy", itol)
         plan = json.loads((output / "plan.json").read_text(encoding="utf-8"))
-        self.assertEqual(plan["candidate_and_selection_counts"]["selected_references_excluding_study"], 3)
+        self.assertEqual(
+            plan["candidate_and_selection_counts"]["selected_references_excluding_query"],
+            3,
+        )
+        self.assertEqual(
+            plan["candidate_and_selection_counts"]["selected_references_excluding_study"],
+            2,
+        )
+
+    def test_protected_studies_over_the_reference_cap_block(self) -> None:
+        rows = _read_tsv(ASSETS / "candidates.example.tsv")
+        table_path = self.temp_root / "too many study sequences.tsv"
+        with table_path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(
+                handle, fieldnames=list(rows[0]), delimiter="\t", lineterminator="\n"
+            )
+            writer.writeheader()
+            for row in rows:
+                if row["accession"] in {
+                    "MOUSE_ALT",
+                    "MOUSE_CAN",
+                    "CHICKEN_OK",
+                }:
+                    row["analysis_group"] = "study"
+                writer.writerow(row)
+
+        def too_many_studies(request: dict[str, Any]) -> None:
+            request["references"]["candidate_table"] = str(table_path)
+
+        request_path = self._write_v02_request(
+            "too many studies request.json", too_many_studies
+        )
+        completed, output = self._run_plan(
+            request_path, out=self.temp_root / "too-many-studies"
+        )
+        self.assertEqual(completed.returncode, 3, completed.stderr)
+        plan = json.loads((output / "plan.json").read_text(encoding="utf-8"))
+        self.assertIn(
+            "REFERENCE_CAP_EXCEEDED_BY_PROTECTED_STUDIES", plan["hard_stops"]
+        )
 
     def test_schema_files_are_valid_json(self) -> None:
         references = REPOSITORY_ROOT / "skills" / "bio-gene-to-reference-tree" / "references"
@@ -706,10 +745,26 @@ class OfflineWorkflowContractTests(unittest.TestCase):
         current_plan_schema = json.loads(
             (references / "plan-0.3.schema.json").read_text(encoding="utf-8")
         )
+        nucleotide_request_schema = json.loads(
+            (references / "request-0.3.schema.json").read_text(encoding="utf-8")
+        )
+        nucleotide_plan_schema = json.loads(
+            (references / "plan-0.4.schema.json").read_text(encoding="utf-8")
+        )
         self.assertEqual(request_schema["properties"]["schema_version"]["const"], "0.2")
         self.assertEqual(plan_schema["properties"]["schema_version"]["const"], "0.2")
         self.assertEqual(current_plan_schema["properties"]["schema_version"]["const"], "0.3")
         self.assertIn("taxonomy_plan", current_plan_schema["required"])
+        self.assertEqual(
+            nucleotide_request_schema["properties"]["schema_version"]["const"],
+            "0.3",
+        )
+        self.assertIn("molecule", nucleotide_request_schema["required"])
+        self.assertEqual(
+            nucleotide_plan_schema["properties"]["schema_version"]["const"],
+            "0.4",
+        )
+        self.assertIn("molecule_plan", nucleotide_plan_schema["required"])
 
 
 if __name__ == "__main__":

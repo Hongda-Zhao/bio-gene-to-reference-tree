@@ -1,15 +1,16 @@
 ---
 name: bio-gene-to-reference-tree
-description: Build an auditable protein gene tree from an accession, raw amino-acid sequence, or protein or gene name plus source organism. Use when an agent must select an environment-appropriate planning, workstation, or HPC route; resolve query metadata and exact NCBI TaxIDs from local taxdump files; classify gene-family conservation at an explicit taxonomic scope; curate references and outgroups; align and trim proteins; run FastTree or IQ-TREE2; generate iTOL or ggtree/ggplot2 outputs; or compare a gene tree with current literature. Require review gates before reference selection, alignment choice, and tree inference.
+description: Build an auditable protein or nucleotide gene tree from an accession, explicitly declared local sequence, or gene, protein, or feature name plus source organism. Use when an agent must choose an environment-appropriate route; resolve metadata and exact NCBI TaxIDs; classify gene-family conservation at an explicit taxonomic scope; curate references and outgroups; align proteins, noncoding DNA or RNA, or clean CDS through a protein-guided codon-preserving route; run FastTree or IQ-TREE2; generate iTOL or ggtree/ggplot2 outputs; or compare a gene tree with current literature. Require review gates before reference selection, alignment choice, and tree inference.
 ---
 
 # Gene to Reference Tree
 
-Build a protein gene tree through explicit, reviewable decisions. Treat acquisition, sampling, alignment, rooting, and literature comparison as scientific analyses rather than mechanical top-hit processing.
+Build a single-gene protein or nucleotide tree through explicit, reviewable decisions. Treat molecule/region definition, acquisition, sampling, alignment, rooting, and literature comparison as scientific analyses rather than mechanical top-hit processing.
 
 ## Preserve the core claim
 
 - Call the result a **gene tree**, not a species tree.
+- Require an exact molecule and analysis-space declaration; never infer it from sequence letters or cross protein, nucleotide, and codon spaces as a fallback.
 - Treat similarity as evidence of homology, never proof of orthology or identical function.
 - Treat support as repeatability under a method, not proof that a topology is correct.
 - Preserve the raw candidate pool, untrimmed alignment, unrooted tree, commands, versions, database snapshots, decisions, and exclusions.
@@ -28,12 +29,12 @@ Build a protein gene tree through explicit, reviewable decisions. Treat acquisit
 
 | Step | Load when | Task file | Exit condition |
 |---:|---|---|---|
-| 1 | Intake is an accession, raw protein/CDS, or name plus organism | [Resolve the query](references/steps/01-resolve-query.md) | One stable local protein record and provenance pass Gate 1 |
+| 1 | Intake is an accession, raw protein/nucleotide/CDS, or name plus organism | [Resolve the query](references/steps/01-resolve-query.md) | One stable molecule-matched local record and provenance pass Gate 1 |
 | 2 | Query identity is resolved but the biological question/scope is not fixed | [Define the objective](references/steps/02-define-objective.md) | Objective, ingroup, relationship policy, and deliverables are explicit |
 | 3 | Objective is fixed and a broad candidate pool is needed | [Discover candidates](references/steps/03-discover-candidates.md) | Candidate FASTA/metadata and acquisition provenance are materialized |
 | 4 | Candidate pool exists and tree tips/outgroups must be proposed | [Select references and outgroups](references/steps/04-select-references-and-outgroups.md) | A hash-bound proposal reaches clustering or Gate 2 review |
 | 5 | Expanded candidates cross the declared clustering trigger | [Cluster expanded candidates](references/steps/05-cluster-expanded-candidates.md) | Cluster mapping is imported and Step 4 is rerun; otherwise skip |
-| 6 | Reference/outgroup set is approved | [Align and assess conservation](references/steps/06-align-and-assess-conservation.md) | Raw protein MSA, conservation assessment, and QC are reviewable |
+| 6 | Reference/outgroup set is approved | [Align and assess conservation](references/steps/06-align-and-assess-conservation.md) | Route-specific raw MSA, conservation assessment, and QC are reviewable |
 | 7 | Trimming/untrimmed sensitivity and primary MSA choice are required | [Trim and test sensitivity](references/steps/07-trim-and-test-sensitivity.md) | One exact alignment hash passes Gate 3 |
 | 8 | Alignment and inference plan are approved | [Infer, root, and check the tree](references/steps/08-infer-root-and-check-tree.md) | Unrooted tree and any separately approved rooted copy are validated |
 | 9 | Tree tips require iTOL, metadata, or local ggtree/ggplot2 output | [Annotate and visualize](references/steps/09-annotate-and-visualize.md) | Tip sets, semantics, annotations, and requested figures agree exactly |
@@ -43,16 +44,17 @@ Step 5 is conditional. Never cluster records whose `analysis_group` is `study` o
 
 ## Apply shared rules only when triggered
 
+- Read [sequence-type-routing.md](references/sequence-type-routing.md) before resolving request 0.3 or any potentially nucleotide input. Requests 0.1/0.2 remain protein-only. Require comparable regions, explicit RNA source encoding (`rna-u` or `dna-t`) with a separately named analysis copy, and CDS frame/code/translation QC. Deterministic trimAl backtranslation is limited to NCBI codes 1/11; other codes and disrupted CDS require a reviewed handoff.
 - Read [taxonomy-resolution.md](references/taxonomy-resolution.md) before deriving or validating a TaxID from an organism name. Use one verified NCBI taxdump snapshot and accept only one character-for-character `scientific name` match whose node exists.
-- Read [environment-routing.md](references/environment-routing.md) before choosing an execution mode, using a capability fallback, or handing work to HPC/SSH. Snapshot the actual compute target, route every required step, and keep `route_hash` independent from the scientific `plan_hash`.
-- Read [tool-routing.md](references/tool-routing.md) before the first live lookup, unpublished-data submission, external executable, or capability fallback.
+- Read [environment-routing.md](references/environment-routing.md) before choosing an execution mode or handing work to HPC/SSH. Snapshot the actual compute target, route every required step, and keep `route_hash` independent from the scientific `plan_hash`.
+- Read [tool-routing.md](references/tool-routing.md) before the first live lookup, unpublished-data submission, external executable, or search-database choice.
 - Read [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md) when conservation classification or recent MSA/trimming precedent affects a decision; filter its [TSV catalog](references/recent-msa-trimming-evidence.tsv) by data architecture and scope.
 - Read [ggtree-visualization.md](references/ggtree-visualization.md) before local publication-oriented rendering.
 - Read [output-contract.md](references/output-contract.md) before creating a request, running the planner, approving hashes, or assembling an executed report.
 
 ## Compile the deterministic review bundle
 
-After an authorized host agent has materialized a resolved protein and candidate TSV/FASTA bundle, locate this file, treat its directory as `<skill-root>`, and run:
+After an authorized host agent has materialized a resolved molecule-matched query and candidate TSV/FASTA bundle plus any required CDS translation or RNA provenance, locate this file, treat its directory as `<skill-root>`, and run:
 
 ```text
 python3 <skill-root>/scripts/gene_to_tree.py plan \
@@ -83,4 +85,4 @@ Neither environment command executes a workflow stage. Default `doctor` is passi
 
 ## Route unsupported analyses
 
-Route species-tree inference, gene-tree/species-tree reconciliation, duplication/loss modeling, HGT analysis, divergence dating, positive selection, recombination-aware inference, non-protein alignments, genome-scale phylogeny, and publication figure design beyond the bundled renderer to dedicated workflows. Identify the need without silently expanding the claim.
+Route species-tree inference, gene-tree/species-tree reconciliation, duplication/loss modeling, HGT analysis, divergence dating, positive selection, recombination-aware inference, covariance-model RNA phylogenetics beyond the optional dedicated `mafft-qinsi` route, automated disrupted/frameshift CDS analysis, genome-scale phylogeny, and publication figure design beyond the bundled renderer to dedicated workflows. The clean-CDS route does not silently promote MACSE review output. Identify the need without expanding the claim.

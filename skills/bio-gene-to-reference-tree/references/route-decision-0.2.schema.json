@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bio-gene-to-reference-tree:route-decision:0.2",
+  "title": "Gene-to-reference-tree route decision 0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_profile_schema_version",
+    "workflow_version",
+    "profile_id",
+    "profile_sha256",
+    "compute_environment_id",
+    "compute_snapshot_sha256",
+    "host_environment_id",
+    "host_snapshot_sha256",
+    "intent",
+    "selected_route",
+    "selected_tree_mode",
+    "resolved_query_molecule",
+    "selected_analysis_kind",
+    "selected_search_mode",
+    "selected_alignment_kind",
+    "selected_alignment_route",
+    "selected_trimming_strategy",
+    "selected_tree_data_kind",
+    "selected_tree_model_family",
+    "genetic_code",
+    "transformations",
+    "compute_target",
+    "scheduler",
+    "status",
+    "required_steps",
+    "stages",
+    "considered_routes",
+    "blockers",
+    "limitations",
+    "warnings",
+    "used_tools",
+    "resource_assessment",
+    "route_hash",
+    "execution_authorized",
+    "authorization_note"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.2"},
+    "source_profile_schema_version": {"enum": ["0.1", "0.2"]},
+    "workflow_version": {"type": "string", "minLength": 1},
+    "profile_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+    "profile_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "compute_environment_id": {"type": "string", "minLength": 1},
+    "compute_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "host_environment_id": {"type": ["string", "null"]},
+    "host_snapshot_sha256": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "intent": {"enum": ["planning", "quick", "accurate", "auto", "visualization"]},
+    "selected_route": {
+      "enum": [
+        "browser-or-host-only",
+        "planning-host-assisted",
+        "planning-offline",
+        "hybrid-agent-hpc",
+        "hybrid-agent-ssh",
+        "hpc-offline",
+        "ssh-offline",
+        "workstation-online",
+        "workstation-offline"
+      ]
+    },
+    "selected_tree_mode": {"enum": ["quick", "accurate", "materialized", null]},
+    "resolved_query_molecule": {"$ref": "#/$defs/queryMolecule"},
+    "selected_analysis_kind": {"enum": ["protein", "nucleotide", "codon", "unknown"]},
+    "selected_search_mode": {"$ref": "#/$defs/searchMode"},
+    "selected_alignment_kind": {"$ref": "#/$defs/dataKind"},
+    "selected_alignment_route": {
+      "enum": [
+        "mafft-protein",
+        "mafft-nucleotide",
+        "mafft-qinsi",
+        "translate-mafft-trimal-backtranslate",
+        "macse-codon-aware",
+        "existing-alignment",
+        null
+      ]
+    },
+    "selected_trimming_strategy": {
+      "enum": [
+        "none",
+        "trimal-columns",
+        "protein-mask-to-codons",
+        "precomputed"
+      ]
+    },
+    "selected_tree_data_kind": {"$ref": "#/$defs/dataKind"},
+    "selected_tree_model_family": {"enum": ["protein", "nucleotide", "codon", "unknown"]},
+    "genetic_code": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/geneticCode"}
+      ]
+    },
+    "transformations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/transformation"}
+    },
+    "compute_target": {"enum": ["local", "hpc", "ssh", "host-only"]},
+    "scheduler": {"enum": ["none", "pbs", "slurm", "lsf", "other"]},
+    "status": {
+      "enum": ["ready", "ready-with-limitations", "planning-only", "handoff-required", "blocked"]
+    },
+    "required_steps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "integer", "minimum": 1, "maximum": 10}
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "allOf": [
+        {"contains": {"properties": {"step": {"const": 1}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 2}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 3}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 4}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 5}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 6}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 7}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 8}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 9}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 10}}, "required": ["step"]}, "minContains": 1, "maxContains": 1}
+      ],
+      "items": {"$ref": "#/$defs/stage"}
+    },
+    "considered_routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["route", "decision"],
+        "properties": {
+          "route": {"type": "string", "minLength": 1},
+          "decision": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "blockers": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "warnings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "used_tools": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "resource_assessment": {"$ref": "#/$defs/resourceAssessment"},
+    "route_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_authorized": {"const": false},
+    "authorization_note": {"type": "string"}
+  },
+  "$defs": {
+    "queryMolecule": {
+      "enum": [
+        "protein",
+        "coding-dna",
+        "coding-rna",
+        "noncoding-dna",
+        "noncoding-rna",
+        "nucleotide-ambiguous",
+        "unknown"
+      ]
+    },
+    "geneticCode": {
+      "enum": [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 16, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
+    },
+    "searchMode": {
+      "enum": [
+        "none",
+        "protein-protein",
+        "nucleotide-nucleotide",
+        "translated-query-protein",
+        "protein-translated-target",
+        "translated-both",
+        "mmseqs2-protein",
+        "mmseqs2-nucleotide",
+        "provider-molecule-aware"
+      ]
+    },
+    "dataKind": {"enum": ["protein", "nucleotide", "codon", "unknown"]},
+    "transformation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "status", "reason_code"],
+      "properties": {
+        "operation": {
+          "enum": [
+            "materialize-rna-analysis-copy",
+            "validate-and-use-cds-translations",
+            "backtranslate-protein-alignment",
+            "export-macse-frameshift-symbols"
+          ]
+        },
+        "status": {"enum": ["required", "review-required"]},
+        "reason_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"}
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step", "task", "status", "environment", "route", "software", "reason_code", "reason"],
+      "properties": {
+        "step": {"type": "integer", "minimum": 1, "maximum": 10},
+        "task": {"type": "string", "minLength": 1},
+        "status": {"enum": ["ready", "conditional", "blocked", "skipped"]},
+        "environment": {"type": "string", "minLength": 1},
+        "route": {"type": "string", "minLength": 1},
+        "software": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "reason_code": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "resourceAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requested_threads",
+        "observed_cpu_count",
+        "requested_memory_gb",
+        "observed_memory_gb",
+        "observed_scratch_free_gb",
+        "status",
+        "limitations"
+      ],
+      "properties": {
+        "requested_threads": {"type": "integer", "minimum": 1},
+        "observed_cpu_count": {"type": ["integer", "null"], "minimum": 1},
+        "requested_memory_gb": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "observed_memory_gb": {"type": ["number", "null"], "minimum": 0},
+        "observed_scratch_free_gb": {"type": ["number", "null"], "minimum": 0},
+        "status": {"enum": ["not-applicable", "within-observed-hints", "review-required"]},
+        "limitations": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"source_profile_schema_version": {"const": "0.1"}},
+        "required": ["source_profile_schema_version"]
+      },
+      "then": {
+        "properties": {
+          "resolved_query_molecule": {"const": "protein"},
+          "selected_analysis_kind": {"const": "protein"},
+          "selected_search_mode": {
+            "enum": [
+              "none",
+              "protein-protein",
+              "mmseqs2-protein",
+              "provider-molecule-aware"
+            ]
+          },
+          "selected_alignment_kind": {"const": "protein"},
+          "selected_tree_data_kind": {"const": "protein"},
+          "selected_tree_model_family": {"const": "protein"},
+          "genetic_code": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"selected_analysis_kind": {"const": "protein"}},
+        "required": ["selected_analysis_kind"]
+      },
+      "then": {
+        "properties": {
+          "selected_alignment_kind": {"const": "protein"},
+          "selected_tree_data_kind": {"const": "protein"},
+          "selected_tree_model_family": {"const": "protein"},
+          "selected_trimming_strategy": {"enum": ["none", "trimal-columns", "precomputed"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"selected_analysis_kind": {"const": "nucleotide"}},
+        "required": ["selected_analysis_kind"]
+      },
+      "then": {
+        "properties": {
+          "selected_tree_data_kind": {"const": "nucleotide"},
+          "selected_tree_model_family": {"const": "nucleotide"}
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "resolved_query_molecule": {"enum": ["coding-dna", "coding-rna"]}
+              },
+              "required": ["resolved_query_molecule"]
+            },
+            "then": {
+              "properties": {
+                "selected_alignment_kind": {"const": "codon"},
+                "selected_trimming_strategy": {
+                  "enum": ["none", "protein-mask-to-codons", "precomputed"]
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "selected_alignment_kind": {"const": "nucleotide"},
+                "selected_trimming_strategy": {
+                  "enum": ["none", "trimal-columns", "precomputed"]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {"selected_analysis_kind": {"const": "codon"}},
+        "required": ["selected_analysis_kind"]
+      },
+      "then": {
+        "properties": {
+          "selected_alignment_kind": {"const": "codon"},
+          "selected_tree_data_kind": {"const": "codon"},
+          "selected_tree_model_family": {"const": "codon"},
+          "selected_trimming_strategy": {
+            "enum": ["none", "protein-mask-to-codons", "precomputed"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"selected_analysis_kind": {"const": "unknown"}},
+        "required": ["selected_analysis_kind"]
+      },
+      "then": {
+        "properties": {
+          "selected_alignment_kind": {"const": "unknown"},
+          "selected_tree_data_kind": {"const": "unknown"},
+          "selected_tree_model_family": {"const": "unknown"},
+          "genetic_code": {"type": "null"}
+        }
+      }
+    }
+  ]
+}

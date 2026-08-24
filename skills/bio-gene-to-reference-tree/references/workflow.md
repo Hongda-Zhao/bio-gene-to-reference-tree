@@ -6,6 +6,7 @@ Use a staged workflow so that automated acquisition cannot silently become an ap
 
 - [State model](#state-model)
 - [Environment preflight](#environment-preflight)
+- [Sequence-type preflight](#sequence-type-preflight)
 - [Query resolution](#gate-1-query-resolution)
 - [Reference and outgroup approval](#gate-2-reference-and-outgroup-approval)
 - [Alignment and trimming approval](#gate-3-alignment-and-trimming-approval)
@@ -32,7 +33,7 @@ intake
   -> complete
 ```
 
-Any state may enter `blocked` or `failed`. Invalidate prior approval when a query sequence, candidate record, threshold, cluster mapping, outgroup, MSA, trim profile, model, support method, command, or decision-bearing color changes.
+Any state may enter `blocked` or `failed`. Invalidate prior approval when a query sequence, molecule declaration, analysis space, comparable-region definition, orientation, RNA normalization, CDS frame/code/translation, candidate record, search database, threshold, cluster mapping, outgroup, MSA/backtranslation, trim profile, model, support method, command, or decision-bearing color changes.
 
 ## Environment preflight
 
@@ -40,9 +41,15 @@ Environment feasibility is a sidecar to the scientific state model, not another 
 
 Bind the decision to the profile and all used snapshots with `route_hash`, but do not include machine state in `plan_hash`. A newly installed tool cannot approve a changed reference set or MSA, and an approved scientific plan cannot prove that a machine is capable or authorized to execute it.
 
+## Sequence-type preflight
+
+Before resolving any request, read [sequence-type-routing.md](sequence-type-routing.md). Requests 0.1 and 0.2 retain their protein-only behavior. Request 0.3 requires an exact molecule declaration and routes to protein, direct noncoding nucleotide, or clean CDS with protein-guided codon-preserving alignment followed by an explicit nucleotide-site or codon model. Never infer molecule type from letters or silently cross analysis spaces.
+
+Require comparable homologous regions. Declare RNA `source_encoding` as `rna-u` or `dna-t`, preserve that source, and hash a separately named DNA-alphabet analysis copy (U→T for `rna-u`, byte-equivalent for `dna-t`). For CDS, require frame, strand, genetic-code, completeness, translation, and stop/frameshift QC. The deterministic trimAl backtranslation route accepts only NCBI codes 1/11; other codes, disrupted CDS, and uncertain CDS stop for reviewed MACSE/PAL2NAL/precomputed handling and do not continue as ordinary nucleotide input. A MACSE review can continue only after an explicit export policy and rerouting with a typed precomputed codon alignment.
+
 ## Gate 1: query resolution
 
-Require a local resolved protein record with a stable ID, sequence, organism, and provenance. For accession/name routes, retain the original input and resolution evidence. Stop on ambiguity, unresolved isoforms, non-protein input, invalid CDS translation, or missing organism/TaxID for a name.
+Require a local molecule-matched record with a stable ID, sequence, organism, region definition, and provenance. For accession/name routes, retain the original input and resolution evidence. Stop on ambiguity, unresolved isoforms/features, missing molecule declaration, non-comparable regions, failed RNA source-encoding/analysis-copy provenance, invalid CDS translation, or missing organism/TaxID for a name.
 
 When NCBI taxdump validation is enabled, validate every candidate `species`/`taxon_id` pair against already-extracted `names.dmp` and `nodes.dmp` from the same recorded snapshot before selection. Accept only a unique character-for-character `scientific name` match and an exact TaxID agreement. Stop on aliases, fuzzy or normalized matches, ambiguity, missing nodes, or mixed/unrecorded snapshots. Bind approval to the dump hashes and `taxonomy_resolution.tsv`.
 
@@ -53,6 +60,8 @@ For unpublished material, stop until the user approves each remote submission cl
 Present:
 
 - acquisition tier and database provenance;
+- declared molecule/analysis space, region compatibility, the three request-0.3 search fields, and any separately established host-side index evidence;
+- RNA normalization or CDS translation/backtranslation evidence when applicable;
 - exact-name taxonomy evidence and taxdump hashes when enabled;
 - counts before/after every filter and cluster;
 - retained taxa and unsampled clades;
@@ -68,11 +77,11 @@ Tie approval to the current `plan_hash`. If MMseqs2 is required, execute it only
 
 Before choosing the primary alignment, review `evidence/conservation_assessment.tsv`: one focal analysis unit, one controlled class, an explicit comparison scope, an evidence basis, stable evidence IDs, and limitations. Accept or revise the provisional row, mark it `reviewed`, and bind its SHA-256 to the alignment approval. A changed assessment reopens this gate.
 
-After MAFFT, present raw-MSA length, per-tip gap/coverage statistics, column occupancy, conserved motif checks, unusual insertions, excluded sequences, and any domain conflict. Never silently remove a sequence.
+After MAFFT, present the explicit `--amino` or `--nuc` route, raw-MSA length, per-tip gap/coverage statistics, column occupancy, conserved motif/region checks, unusual insertions, excluded sequences, and any domain conflict. For a codon route, also present exact CDS↔translation IDs, genetic code, raw protein MSA, trimAl `-backtrans` argv, triplet integrity, and translation-equality QC. Never silently remove a sequence.
 
 When trimming is enabled, present every trimAl profile, threshold semantics, retained length/fraction, removed-column record, motif retention, and topology sensitivity if fast profile trees were compared. Require an explicit choice of the primary alignment before IQ-TREE2.
 
-Stop when the MSA has mixed molecule types/domains, duplicate tip IDs, severe coverage failure, unresolvable homology, fewer than four usable taxa/sequences, or a key conclusion that is unstable across reasonable MSA/trimming decisions.
+Stop when the MSA has mixed molecule types/domains, non-comparable regions, duplicate tip IDs, severe coverage failure, unresolvable homology, invalid codon/backtranslation QC, an unreviewed MACSE requirement, fewer than four usable taxa/sequences, or a key conclusion that is unstable across reasonable MSA/trimming decisions.
 
 ## Tree-inference gate
 
@@ -82,6 +91,8 @@ Verify the approved MSA hash, exact executable/version, resource limits, thread 
 - IQ-TREE2 UFBoot2 using `-B` and `-bnni`;
 - standard bootstrap using `-b`;
 - SH-aLRT using `-alrt`.
+
+Bind the inference command to analysis space: protein uses an explicit protein model; noncoding DNA/RNA and an explicitly requested nucleotide-site CDS analysis use FastTree `-nt -gtr` or IQ-TREE `-st DNA`; codon analysis uses IQ-TREE `-st CODON<n>` with the approved genetic code, including explicit `CODON1`. Both CDS analysis spaces retain the reviewed codon-preserving backtranslation, but only the latter is a codon substitution model. FastTree cannot replace a codon model, and a missing analysis-specific executable blocks rather than changing molecule space.
 
 Preserve the unrooted tree and all native logs. Create a rooted derivative only from approved outgroup tips. Re-open the decision gate if outgroup behavior, long-branch attraction, or model sensitivity makes the root unreliable.
 
@@ -102,6 +113,8 @@ Mark the workflow complete only when the final report includes:
 - resolved query and acquisition provenance;
 - selected/rejected references and cluster mapping;
 - raw and approved MSA plus QC;
+- exact molecule/analysis-space declaration, comparable-region evidence, and actual search database provenance;
+- RNA source-encoding/analysis-copy receipt or CDS frame/code/translation/backtranslation QC when applicable;
 - reviewed, hash-bound conservation assessment;
 - unrooted tree and optional separately rooted tree;
 - correctly named support measures and model;
@@ -115,7 +128,7 @@ Mark the workflow complete only when the final report includes:
 
 The planner compiles only the local pre-execution review bundle. It may validate supplied local taxdump files but never downloads them. It uses `pending-clustering`, `blocked`, or `pending-reference-approval`; tree rendering and later states belong to separately invoked local or host-agent execution and must not be claimed by the planner.
 
-The helper accepts request schema 0.1 for migration, emits a deprecation warning, and never mutates the source request. It emits plan/output schema 0.3; use request schema 0.2 for all new work.
+The helper keeps request schemas 0.1 and 0.2 as legacy protein-only inputs and never mutates them. Use request schema 0.3 for new protein or nucleotide work; it emits the molecule-aware plan/output schema 0.4. A failed nucleotide or codon route never falls back to the legacy protein plan.
 
 ## Out-of-scope routing
 
