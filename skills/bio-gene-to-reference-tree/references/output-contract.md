@@ -23,6 +23,8 @@ Every live accession or name route must be materialized before planning as:
 
 The helper never performs the live resolution itself.
 
+`privacy.remote_search_allowed` is a coarse capability gate, not consent to submit an unpublished sequence, tree, or metadata. Record each such submission/upload permission separately in host-side decision provenance, default it to denied when absent, and never treat a planned bundle as authorization for a remote action.
+
 ## Deterministic planning artifacts
 
 A successful plan from a schema 0.2 request emits plan schema 0.3 and produces:

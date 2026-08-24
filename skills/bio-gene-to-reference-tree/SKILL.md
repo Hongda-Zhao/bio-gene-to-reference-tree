@@ -5,140 +5,60 @@ description: Build an auditable protein gene tree from an accession, raw amino-a
 
 # Gene to Reference Tree
 
-Build a protein gene tree through explicit, reviewable decisions. Treat database acquisition, reference sampling, alignment, rooting, and literature comparison as scientific analyses rather than mechanical top-hit processing.
+Build a protein gene tree through explicit, reviewable decisions. Treat acquisition, sampling, alignment, rooting, and literature comparison as scientific analyses rather than mechanical top-hit processing.
 
 ## Preserve the core claim
 
 - Call the result a **gene tree**, not a species tree.
-- Treat similarity as evidence of homology, never as proof of orthology or identical function.
-- Treat support as repeatability under a method, not proof that the topology is correct.
-- Preserve the raw candidate pool, untrimmed alignment, unrooted tree, commands, versions, database snapshots, and every exclusion.
-- Never upload an unpublished sequence, candidate set, tree, or metadata to a remote service without explicit permission.
+- Treat similarity as evidence of homology, never proof of orthology or identical function.
+- Treat support as repeatability under a method, not proof that a topology is correct.
+- Preserve the raw candidate pool, untrimmed alignment, unrooted tree, commands, versions, database snapshots, decisions, and exclusions.
+- Never upload an unpublished sequence, candidate set, tree, or metadata without explicit permission for that remote action.
+- Never fabricate a lookup, sequence, TaxID, orthology call, citation, version, release, or executed result.
 
-## Run the workflow
+## Load progressively
 
-Read [workflow.md](references/workflow.md) before the first run. Revisit it whenever a state transition, approval gate, invalidated hash, or failure condition affects what may run next.
+1. Read [workflow.md](references/workflow.md) once at the start to establish states, approval gates, invalidation rules, and completion criteria.
+2. Determine the current state and load **only the matching step file** from the table below. Do not preload all ten steps.
+3. Treat supporting links as discovery pointers, not automatic loads. Open a shared reference only when the current procedure requires it or the explicit trigger below applies.
+4. Produce the step's required outputs and satisfy its stop/review conditions before advancing.
+5. On resume, verify hashes and approvals, then continue from the earliest invalid or incomplete step.
 
-### 1. Classify and resolve the query
+## Route the current task
 
-Classify the input as:
+| Step | Load when | Task file | Exit condition |
+|---:|---|---|---|
+| 1 | Intake is an accession, raw protein/CDS, or name plus organism | [Resolve the query](references/steps/01-resolve-query.md) | One stable local protein record and provenance pass Gate 1 |
+| 2 | Query identity is resolved but the biological question/scope is not fixed | [Define the objective](references/steps/02-define-objective.md) | Objective, ingroup, relationship policy, and deliverables are explicit |
+| 3 | Objective is fixed and a broad candidate pool is needed | [Discover candidates](references/steps/03-discover-candidates.md) | Candidate FASTA/metadata and acquisition provenance are materialized |
+| 4 | Candidate pool exists and tree tips/outgroups must be proposed | [Select references and outgroups](references/steps/04-select-references-and-outgroups.md) | A hash-bound proposal reaches clustering or Gate 2 review |
+| 5 | Expanded candidates cross the declared clustering trigger | [Cluster expanded candidates](references/steps/05-cluster-expanded-candidates.md) | Cluster mapping is imported and Step 4 is rerun; otherwise skip |
+| 6 | Reference/outgroup set is approved | [Align and assess conservation](references/steps/06-align-and-assess-conservation.md) | Raw protein MSA, conservation assessment, and QC are reviewable |
+| 7 | Trimming/untrimmed sensitivity and primary MSA choice are required | [Trim and test sensitivity](references/steps/07-trim-and-test-sensitivity.md) | One exact alignment hash passes Gate 3 |
+| 8 | Alignment and inference plan are approved | [Infer, root, and check the tree](references/steps/08-infer-root-and-check-tree.md) | Unrooted tree and any separately approved rooted copy are validated |
+| 9 | Tree tips require iTOL, metadata, or local ggtree/ggplot2 output | [Annotate and visualize](references/steps/09-annotate-and-visualize.md) | Tip sets, semantics, annotations, and requested figures agree exactly |
+| 10 | Current evolutionary evidence and final reporting are required | [Compare evidence and report](references/steps/10-compare-evidence-and-report.md) | Completion contract is satisfied with evidence or explicit limitations |
 
-- a versioned NCBI, RefSeq, UniProt, Ensembl, or other accession;
-- a raw amino-acid sequence;
-- a protein or gene name plus source organism or TaxID.
+Step 5 is conditional. Never cluster records whose `analysis_group` is `study` or `outgroup`, and never advance on a pre-clustering approval after membership changes.
 
-Resolve an accession against its authoritative namespace and record status, version, sequence, organism, TaxID, lineage, gene/protein names, source release, retrieval time, and sequence SHA-256. For a name, require an organism or TaxID and use literature only to disambiguate identity and context; retrieve the sequence from an authoritative database record. For a raw sequence, validate the alphabet, length, low complexity, and likely molecule type before searching.
+## Apply shared rules only when triggered
 
-When deriving or validating a TaxID from an organism name, prefer a verified, single-snapshot NCBI `new_taxdump`. Require character-for-character equality to a unique `names.dmp` `scientific name`, then verify the TaxID in the same snapshot's `nodes.dmp`. Do not case-fold, trim, accept an alias, or select the first ambiguous match. Read [taxonomy-resolution.md](references/taxonomy-resolution.md) before assigning TaxIDs from names.
-
-Before any live lookup, including a public accession or symbol lookup, record whether remote queries are allowed. If they are not, stop and request a local resolved FASTA/metadata handoff. Obtain separate explicit permission before uploading an unpublished sequence.
-
-Read [query-resolution.md](references/query-resolution.md) before resolving an accession, name, raw sequence, CDS, or viral query.
-
-### 2. Define the biological objective
-
-Choose one objective explicitly:
-
-- `ortholog-tree`: compare corresponding genes across species; prefer curated orthology and exclude paralogs by default;
-- `homolog-context`: place a sequence in a broader family; retain labelled paralogs when they answer the question;
-- `within-species`: compare alleles, strains, isolates, or closely related copies without requiring multiple TaxIDs.
-
-Record `sequence_context: viral` separately when applicable. For viral data, require a segment/gene definition and check recombination, reassortment, segmentation, and mosaic ancestry before interpreting a single tree.
-
-### 3. Discover and annotate candidates
-
-Use the objective-specific route in [tool-routing.md](references/tool-routing.md):
-
-1. Prefer curated ortholog resources for an ortholog tree.
-2. Search RefSeq protein first for a raw protein.
-3. Escalate unresolved cases through reviewed UniProt/Swiss-Prot, broader UniProtKB or `nr`, then profile/domain or structure-aware methods.
-4. Retrieve substantially more candidates than the final tree needs.
-
-Record query and target coverage, percent identity, alignment span, E-value, bit score, domain architecture, orthology evidence, accession version, taxonomy, database release, retrieval time, and the raw provider response or its checksum. Never select only BLAST top N.
-
-### 4. Select references and outgroup candidates
-
-Apply [reference-selection.md](references/reference-selection.md). Balance references across the declared taxonomic scope and keep explicit inclusion/exclusion reason codes. Prefer a nearby homologous sister lineage outside the ingroup as an outgroup; never choose the lowest-scoring or most distant hit automatically. Keep two or more outgroup candidates when feasible and retain an unrooted interpretation if no defensible outgroup exists.
-
-Stop for **reference approval** after showing selected and rejected accessions, taxa, paralogs, fragments, domain warnings, sampling gaps, and outgroup rationales.
-
-### 5. Cluster only when needed
-
-If the expanded candidate pool crosses the declared trigger, cluster only the `expanded` group with MMseqs2. Preserve every `study` and `outgroup` sequence outside clustering. Specify both sequence identity and coverage; `-c` alone is not a redundancy threshold.
-
-Use this full-length starting profile unless the objective justifies another value:
-
-```text
-mmseqs easy-linclust expanded_candidates.faa clusters mmseqs_tmp \
-  --min-seq-id 0.95 -c 0.8 --cov-mode 0 --threads <fixed>
-```
-
-Keep the representative/member mapping, annotate `cluster_id`, and re-run reference planning. Do not silently erase accessions or distinct taxa.
-
-### 6. Align and inspect
-
-First confirm that the approved inputs are homologous protein sequences for one gene or protein family. Codon matrices, target-capture loci, concatenated ortholog sets, pangenome core alignments, and reference-mapped SNP pseudoalignments are different data architectures. Use their catalog rows only as contextual evidence; route nucleotide or genome-scale material to a purpose-specific workflow instead of silently applying this protein MAFFT/trimAl path.
-
-Describe conservation with a scale, not a bare binary label. Assign a provisional `conservation_class`, `conservation_scope`, and `conservation_basis` using the controlled vocabulary in [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md). Distinguish deep core markers, clade-conserved markers, broadly conserved families, variable multigene families, lineage-specific or rapidly evolving families, mixed panels, and workflows where the label is not applicable. Base the assignment on taxonomic distribution, copy-number or orthology evidence, marker design, and domain architecture; do not infer sequence conservation from a familiar gene name or from similarity alone. Record the decision in `evidence/conservation_assessment.tsv`, review it before choosing the primary alignment, and bind its hash to the alignment approval and final checksums as specified in [output-contract.md](references/output-contract.md).
-
-Use MAFFT and choose the mode from sequence count and architecture, not divergence alone:
-
-- `auto` for general routing;
-- L-INS-i for a small set with one alignable domain and difficult flanks;
-- G-INS-i for globally alignable full-length proteins;
-- E-INS-i for conserved motifs separated by long insertions, when motif order is shared.
-
-Inspect coverage, gap fraction, occupancy, conserved motifs, mixed domains, fragments, fusions, duplicate tip IDs, and suspicious long branches. Preserve `alignment.raw.faa`. Read [alignment-and-tree.md](references/alignment-and-tree.md) before choosing or running MAFFT, trimAl, FastTree, or IQ-TREE2.
-
-When recent literature is used to choose or justify an alignment strategy, read [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md) and filter its companion [TSV catalog](references/recent-msa-trimming-evidence.tsv) by molecule, gene or marker architecture, conservation class and scope, dataset scale, and taxonomic depth. Treat matching rows as precedents to verify at the source, never as automatic defaults.
-
-### 7. Treat trimming as a sensitivity analysis
-
-Use trimAl profiles with explicit `-gt` semantics. A value of `0.98` is extremely strict; `0.10` or `0.05` is extremely permissive. Never infer a threshold solely from “close,” “distant,” or “viral.”
-
-Retain each profile, report columns removed and retained fraction, verify conserved regions, and compare key topology when profiles differ. Stop if trimming removes too much information or changes the biological conclusion. Obtain **alignment/trimming approval** before tree inference.
-
-Keep `not-reported` distinct from `explicit-none` when extracting published methods. Never invent an unreported version, mode, threshold, or CLI translation. Treat `exact` as a reporting-provenance state, not proof that an article interpreted the option correctly; verify decision-bearing flags against the reported tool version and expose any prose-versus-argv conflict before execution.
-
-### 8. Infer and label support correctly
-
-- Use FastTree only for an exploratory approximate-ML tree. Label its default node values as SH-like local support, not global bootstrap.
-- Use IQ-TREE2 for the primary accurate workflow. Default to `-m MFP -B 1000 -bnni -alrt 1000` with fixed threads and seed.
-- Use `-b 1000`, not `-B 1000`, only when the user explicitly requests standard nonparametric bootstrap.
-- Consider C60/PMSF or other richer models for deep, heterogeneous, long-branch-prone protein data.
-
-Retain the unrooted tree. Produce a separate rooted copy only from an approved outgroup. Never interpret high support as immunity to alignment error, model misspecification, or long-branch attraction.
-
-### 9. Generate iTOL, ggtree, and metadata outputs
-
-Generate an official `DATASET_COLORSTRIP` file by default:
-
-- `study`: orange `#E69F00`;
-- `expanded`: green `#009E73`;
-- `outgroup`: gray `#999999`.
-
-Generate `DATASET_RANGE` only after the final topology shows that a requested group is a meaningful contiguous clade; do not use a range to imply monophyly. Keep full evolutionary metadata in TSV rather than overloading tree labels. Read [itol-and-literature.md](references/itol-and-literature.md) before generating iTOL/metadata outputs or beginning the literature comparison.
-
-For a reproducible local figure, use `scripts/render_tree_ggtree.R` with `ggtree + ggplot2`. Require exact equality among Newick tips, selected `sequence_metadata.tsv` tip IDs, and optional iTOL DATA tips. Declare root state, branch-length semantics, and support type; never reroot, ladderize, or infer a support scale during rendering. Prefer SVG/PDF and preserve the settings TSV. Read [ggtree-visualization.md](references/ggtree-visualization.md) before rendering.
-
-### 10. Compare with current phylogenetic evidence
-
-Search directly relevant phylogenomic and taxonomic literature first, then recent reviews, foundational studies, and recognized taxonomy. Escalate exact species to genus, family, then order when direct evidence is absent, and label the evidence as indirect. For viruses, use current ICTV taxonomy in addition to primary literature.
-
-Record DOI/PMID, year, taxon coverage, data type, inference method/model, topology claim, directness, conflicts, and limitations. Compare the gene tree qualitatively with accepted species relationships; do not treat discordance as automatic pipeline failure.
+- Read [taxonomy-resolution.md](references/taxonomy-resolution.md) before deriving or validating a TaxID from an organism name. Use one verified NCBI taxdump snapshot and accept only one character-for-character `scientific name` match whose node exists.
+- Read [tool-routing.md](references/tool-routing.md) before the first live lookup, unpublished-data submission, external executable, or capability fallback.
+- Read [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md) when conservation classification or recent MSA/trimming precedent affects a decision; filter its [TSV catalog](references/recent-msa-trimming-evidence.tsv) by data architecture and scope.
+- Read [ggtree-visualization.md](references/ggtree-visualization.md) before local publication-oriented rendering.
+- Read [output-contract.md](references/output-contract.md) before creating a request, running the planner, approving hashes, or assembling an executed report.
 
 ## Compile the deterministic review bundle
 
-Read [output-contract.md](references/output-contract.md) before creating a request, running the planner, interpreting its review bundle, or assembling the final executed report.
-
-After an authorized host agent has materialized a resolved protein and candidate TSV/FASTA bundle, locate this `SKILL.md`, treat its directory as the skill root, and run:
+After an authorized host agent has materialized a resolved protein and candidate TSV/FASTA bundle, locate this file, treat its directory as `<skill-root>`, and run:
 
 ```text
 python3 <skill-root>/scripts/gene_to_tree.py plan \
   --request <request.json> --offline --dry-run --out <new-output-directory>
 ```
 
-Review `selected_references.tsv`, `rejected_references.tsv`, `reference_set.faa`, `sequence_metadata.tsv`, `itol_roles.txt`, `plan.json`, and `manifest.json`. The helper launches no network request or external executable in plan mode, refuses overwrite, stores commands as argument arrays, and invalidates approval when a decision-bearing input changes.
+Review the selected/rejected tables, reference FASTA, sequence metadata, iTOL roles, plan, manifest, hashes, warnings, and planned argv arrays. The helper performs no network request or external bioinformatics execution in `plan` mode, refuses overwrite, and invalidates approval after decision-bearing changes.
 
 Inspect optional local executables with:
 
@@ -146,27 +66,8 @@ Inspect optional local executables with:
 python3 <skill-root>/scripts/gene_to_tree.py doctor --json
 ```
 
-## Keep capability claims honest
+The host supplies separately authorized database, literature, browser, and shell capabilities. The bundled helper validates a materialized local handoff and compiles deterministic plans; it does not download databases, search literature, run MMseqs2/MAFFT/trimAl/FastTree/IQ-TREE2/R, root a tree, or upload to iTOL during `plan`.
 
-Use host-provided, authorized database, literature, browser, and shell capabilities for live acquisition and execution. The bundled helper validates a materialized local bundle, optionally validates organism/TaxID pairs against supplied local NCBI dump files, and compiles deterministic plans and annotations. It does not download taxdump files or query NCBI, UniProt, Ensembl, OMA, OrthoDB, literature indexes, Open Tree, ICTV, or iTOL, and it does not run MMseqs2, MAFFT, trimAl, FastTree, IQ-TREE2, or R during `plan`.
+## Route unsupported analyses
 
-Do not fabricate a lookup result, sequence, TaxID, orthology call, citation, tool version, or database release when a capability is unavailable.
-
-## Bundled resources
-
-- [query-resolution.md](references/query-resolution.md): accession, name, raw-sequence, CDS, fallback, privacy, and viral routing.
-- [taxonomy-resolution.md](references/taxonomy-resolution.md): official NCBI taxdump snapshots, strict scientific-name matching, TaxID status, and provenance.
-- [tool-routing.md](references/tool-routing.md): authoritative databases, search tiers, and executable boundaries.
-- [reference-selection.md](references/reference-selection.md): selection, clustering, taxonomic balance, outgroups, and reason codes.
-- [alignment-and-tree.md](references/alignment-and-tree.md): MAFFT, trimAl, FastTree, IQ-TREE2, QC, and support semantics.
-- [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md): a recent-literature routing guide, scale-aware gene-conservation classes, reporting-state semantics, and refresh protocol.
-- [recent-msa-trimming-evidence.tsv](references/recent-msa-trimming-evidence.tsv): machine-readable 2023-08-24 to 2026-08-24 MSA and post-alignment evidence with conservation class, scope, and basis, one row per analysis workflow.
-- [itol-and-literature.md](references/itol-and-literature.md): iTOL files, metadata, evidence search, and gene-tree/species-tree comparison.
-- [ggtree-visualization.md](references/ggtree-visualization.md): local ggtree/ggplot2 rendering, exact tip joins, support semantics, and vector exports.
-- [workflow.md](references/workflow.md): states, gates, failure conditions, and viral branch.
-- [output-contract.md](references/output-contract.md): request, artifact, plan, manifest, and final-report contracts.
-- `assets/conservation-assessment.example.tsv`: canonical host-authored TSV template; copy it into the run's `evidence/` directory, replace the example row, and review it before alignment approval.
-- `references/request-0.2.schema.json`, `references/plan-0.2.schema.json`, and `references/plan-0.3.schema.json`: portable request and versioned plan schemas.
-- `scripts/gene_to_tree.py`: standard-library offline review-bundle compiler and tool doctor.
-- `scripts/ncbi_taxonomy.py`: strict, standard-library resolver for local `names.dmp` and `nodes.dmp` files.
-- `scripts/render_tree_ggtree.R`: local publication-figure renderer using ggtree and ggplot2.
+Route species-tree inference, gene-tree/species-tree reconciliation, duplication/loss modeling, HGT analysis, divergence dating, positive selection, recombination-aware inference, non-protein alignments, genome-scale phylogeny, and publication figure design beyond the bundled renderer to dedicated workflows. Identify the need without silently expanding the claim.
