@@ -1,0 +1,102 @@
+{
+  "schema_version": "0.3",
+  "project_id": "synthetic-nucleotide-review",
+  "objective": "homolog-context",
+  "sequence_context": "cellular",
+  "molecule": {
+    "type": "noncoding-dna",
+    "analysis_kind": "nucleotide",
+    "coding_status": "not-applicable",
+    "genetic_code": null,
+    "alignment_strategy": "mafft-nucleotide",
+    "trimming_strategy": "trimal-columns",
+    "rna_structure_aware": false,
+    "source_encoding": "not-applicable"
+  },
+  "query": {
+    "kind": "nucleotide-fasta",
+    "path": "query.nucleotide.example.fna",
+    "id": "QUERY_NT1",
+    "organism": "Homo sapiens",
+    "taxon_id": "9606",
+    "strand": "plus",
+    "feature_name": "synthetic noncoding locus",
+    "sequence_region": "complete synthetic locus",
+    "source_db": "SyntheticDB",
+    "source_release": "2026-08",
+    "retrieved_at": "2026-08-25"
+  },
+  "taxon_scope": {
+    "ingroup": "Vertebrata",
+    "outgroup": "Tunicata"
+  },
+  "privacy": {
+    "remote_search_allowed": false,
+    "unpublished_sequence": false
+  },
+  "references": {
+    "strategy": "local-bundle",
+    "candidate_table": "candidates.nucleotide.example.tsv",
+    "candidate_fasta": "candidates.nucleotide.example.fna"
+  },
+  "selection": {
+    "min_query_coverage": 0.8,
+    "min_target_coverage": 0.0,
+    "min_length_ratio": 0.8,
+    "max_length_ratio": 1.2,
+    "max_per_taxon": 1,
+    "max_references": 4,
+    "min_ingroup_taxa": 2,
+    "require_outgroup": true,
+    "outgroup_count": 1,
+    "allow_paralogs": false
+  },
+  "clustering": {
+    "mode": "off"
+  },
+  "alignment": {
+    "tool": "mafft",
+    "mode": "auto",
+    "threads": 4
+  },
+  "trimming": {
+    "enabled": true,
+    "tool": "trimal",
+    "primary_profile": "balanced",
+    "profiles": [
+      {"id": "balanced", "gap_threshold": 0.9}
+    ],
+    "min_retained_fraction": 0.5,
+    "compare_topologies": true
+  },
+  "tree": {
+    "mode": "accurate",
+    "tool": "iqtree2",
+    "model": "MFP",
+    "support": {
+      "method": "ultrafast",
+      "replicates": 1000,
+      "sh_alrt": 1000,
+      "bnni": true
+    },
+    "threads": 4,
+    "seed": 12345,
+    "rooting": "outgroup"
+  },
+  "taxonomy": {
+    "enabled": false
+  },
+  "itol": {
+    "enabled": true,
+    "dataset_label": "Sequence roles",
+    "colors": {
+      "study": "#E69F00",
+      "expanded": "#009E73",
+      "outgroup": "#999999"
+    },
+    "generate_ranges_after_tree_qc": false
+  },
+  "literature": {
+    "enabled": false
+  }
+}

@@ -1,0 +1,667 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bio-gene-to-reference-tree:request:0.3",
+  "title": "Gene-to-reference-tree request 0.3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project_id",
+    "objective",
+    "query",
+    "molecule",
+    "taxon_scope",
+    "privacy",
+    "references",
+    "selection",
+    "alignment",
+    "tree"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.3"},
+    "project_id": {"type": "string", "minLength": 1},
+    "objective": {
+      "enum": ["ortholog-tree", "homolog-context", "within-species"]
+    },
+    "sequence_context": {"enum": ["cellular", "viral"]},
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "path", "id", "organism", "source_db", "source_release", "retrieved_at"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "protein-fasta",
+            "nucleotide-fasta",
+            "accession",
+            "protein-name",
+            "sequence-name",
+            "gene-symbol"
+          ]
+        },
+        "path": {"type": "string", "minLength": 1},
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]+$"},
+        "original_value": {"type": "string", "minLength": 1},
+        "organism": {"type": "string", "minLength": 1},
+        "taxon_id": {"type": "string", "pattern": "^[0-9]*$"},
+        "gene_name": {"type": "string"},
+        "protein_name": {"type": "string"},
+        "feature_name": {"type": "string"},
+        "strand": {"enum": ["plus", "minus", "not-applicable"]},
+        "sequence_region": {"type": "string"},
+        "source_db": {"type": "string", "minLength": 1},
+        "source_release": {"type": "string", "minLength": 1},
+        "retrieved_at": {"$ref": "#/$defs/dateOrUtcTimestamp"}
+      }
+    },
+    "molecule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "analysis_kind",
+        "coding_status",
+        "genetic_code",
+        "alignment_strategy",
+        "trimming_strategy",
+        "rna_structure_aware",
+        "source_encoding"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "protein",
+            "noncoding-dna",
+            "noncoding-rna",
+            "coding-dna",
+            "coding-rna"
+          ]
+        },
+        "analysis_kind": {"enum": ["protein", "nucleotide", "codon"]},
+        "coding_status": {"enum": ["not-applicable", "clean"]},
+        "genetic_code": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/geneticCode"}
+          ]
+        },
+        "alignment_strategy": {
+          "enum": [
+            "mafft-protein",
+            "mafft-nucleotide",
+            "translate-mafft-backtranslate"
+          ]
+        },
+        "trimming_strategy": {
+          "enum": ["none", "trimal-columns", "protein-mask-to-codons"]
+        },
+        "rna_structure_aware": {"type": "boolean"},
+        "source_encoding": {"enum": ["not-applicable", "rna-u", "dna-t"]}
+      }
+    },
+    "taxon_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ingroup", "outgroup"],
+      "properties": {
+        "ingroup": {"type": "string", "minLength": 1},
+        "outgroup": {"type": "string"}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["remote_search_allowed"],
+      "properties": {
+        "remote_search_allowed": {"type": "boolean"},
+        "unpublished_sequence": {"type": "boolean"}
+      }
+    },
+    "references": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "candidate_table", "candidate_fasta"],
+      "properties": {
+        "strategy": {"enum": ["ortholog-first", "homolog-first", "local-bundle"]},
+        "candidate_table": {"type": "string", "minLength": 1},
+        "candidate_fasta": {"type": "string", "minLength": 1},
+        "translation_fasta": {"type": "string", "minLength": 1},
+        "discovery_tiers": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min_query_coverage",
+        "min_target_coverage",
+        "min_length_ratio",
+        "max_length_ratio",
+        "max_per_taxon",
+        "max_references",
+        "min_ingroup_taxa",
+        "require_outgroup",
+        "outgroup_count",
+        "allow_paralogs"
+      ],
+      "properties": {
+        "min_query_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "min_target_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "min_length_ratio": {"type": "number", "minimum": 0},
+        "max_length_ratio": {"type": "number", "minimum": 0},
+        "max_per_taxon": {"type": "integer", "minimum": 1},
+        "max_references": {"type": "integer", "minimum": 1},
+        "min_ingroup_taxa": {"type": "integer", "minimum": 1},
+        "require_outgroup": {"type": "boolean"},
+        "outgroup_count": {"type": "integer", "minimum": 0},
+        "allow_paralogs": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"require_outgroup": {"const": true}},
+            "required": ["require_outgroup"]
+          },
+          "then": {"properties": {"outgroup_count": {"minimum": 1}}},
+          "else": {"properties": {"outgroup_count": {"const": 0}}}
+        }
+      ]
+    },
+    "clustering": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {"enum": ["off", "auto", "precomputed"]},
+        "tool": {"const": "mmseqs2"},
+        "trigger_min_sequences": {"type": "integer", "minimum": 2},
+        "algorithm": {"enum": ["easy-linclust", "easy-cluster"]},
+        "min_seq_id": {"type": "number", "minimum": 0, "maximum": 1},
+        "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "coverage_mode": {"type": "integer", "minimum": 0, "maximum": 5},
+        "threads": {"type": "integer", "minimum": 1},
+        "preserve_analysis_groups": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["study", "outgroup"]}
+        }
+      }
+    },
+    "alignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "mode"],
+      "properties": {
+        "tool": {"const": "mafft"},
+        "mode": {"enum": ["auto", "linsi", "ginsi", "einsi", "qinsi"]},
+        "threads": {"type": "integer", "minimum": 1}
+      }
+    },
+    "trimming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "tool": {"const": "trimal"},
+        "primary_profile": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "gap_threshold"],
+            "properties": {
+              "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+              "gap_threshold": {"type": "number", "minimum": 0, "maximum": 1}
+            }
+          }
+        },
+        "min_retained_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+        "compare_topologies": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"enabled": {"const": true}},
+            "required": ["enabled"]
+          },
+          "then": {"required": ["tool", "primary_profile", "profiles"]}
+        }
+      ]
+    },
+    "tree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "tool", "rooting", "support"],
+      "properties": {
+        "mode": {"enum": ["fast", "accurate"]},
+        "tool": {"enum": ["fasttree", "iqtree2"]},
+        "model": {"type": "string", "pattern": "^[A-Za-z0-9+._,/-]+$"},
+        "threads": {"type": "integer", "minimum": 1},
+        "seed": {"type": "integer", "minimum": 1},
+        "rooting": {"enum": ["unrooted", "outgroup"]},
+        "support": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method"],
+          "properties": {
+            "method": {"enum": ["sh-like-local", "ultrafast", "standard-bootstrap"]},
+            "replicates": {"type": "integer", "minimum": 0},
+            "sh_alrt": {"type": "integer", "minimum": 0},
+            "bnni": {"type": "boolean"}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"mode": {"const": "fast"}},
+            "required": ["mode"]
+          },
+          "then": {
+            "properties": {
+              "tool": {"const": "fasttree"},
+              "support": {
+                "properties": {"method": {"const": "sh-like-local"}}
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "tool": {"const": "iqtree2"},
+              "model": {"const": "MFP"},
+              "support": {
+                "properties": {
+                  "method": {"enum": ["ultrafast", "standard-bootstrap"]},
+                  "replicates": {"minimum": 1000},
+                  "sh_alrt": {"minimum": 1000}
+                },
+                "required": ["replicates", "sh_alrt"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "support": {
+                "properties": {"method": {"const": "standard-bootstrap"}},
+                "required": ["method"]
+              }
+            },
+            "required": ["support"]
+          },
+          "then": {
+            "properties": {
+              "support": {
+                "properties": {"bnni": {"const": false}}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "taxonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "source": {"const": "ncbi-taxdump"},
+        "match_mode": {"const": "exact-scientific-name"},
+        "names_dmp": {"type": "string", "minLength": 1},
+        "nodes_dmp": {"type": "string", "minLength": 1},
+        "snapshot": {"type": "string", "minLength": 1},
+        "source_url": {
+          "type": "string",
+          "pattern": "^https://ftp\\.ncbi\\.nlm\\.nih\\.gov/pub/taxonomy/(?:new_taxdump/new_taxdump\\.(?:tar\\.gz|zip)|taxdump_archive/new_taxdump_[0-9]{4}-[0-9]{2}-[0-9]{2}\\.zip)$"
+        },
+        "retrieved_at": {"$ref": "#/$defs/dateOrUtcTimestamp"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"enabled": {"const": true}},
+            "required": ["enabled"]
+          },
+          "then": {
+            "required": [
+              "source",
+              "match_mode",
+              "names_dmp",
+              "nodes_dmp",
+              "snapshot",
+              "source_url",
+              "retrieved_at"
+            ]
+          }
+        }
+      ]
+    },
+    "itol": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "dataset_label": {"type": "string", "minLength": 1},
+        "colors": {"$ref": "#/$defs/roleColors"},
+        "generate_ranges_after_tree_qc": {"type": "boolean"}
+      }
+    },
+    "literature": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "years_back": {"type": "integer", "minimum": 1},
+        "include_foundational": {"type": "boolean"},
+        "taxon_fallback_ranks": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "sources": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "geneticCode": {
+      "enum": [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 16, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
+    },
+    "deterministicGeneticCode": {"enum": [1, 11]},
+    "dateOrUtcTimestamp": {
+      "type": "string",
+      "oneOf": [
+        {"format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        {
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|\\+00:00)$"
+        }
+      ]
+    },
+    "roleColors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["study", "expanded", "outgroup"],
+      "properties": {
+        "study": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+        "expanded": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+        "outgroup": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "molecule": {
+            "properties": {"type": {"const": "protein"}},
+            "required": ["type"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "query": {
+            "properties": {
+              "kind": {
+                "enum": ["protein-fasta", "accession", "protein-name", "gene-symbol"]
+              },
+              "strand": {"const": "not-applicable"}
+            }
+          },
+          "molecule": {
+            "properties": {
+              "analysis_kind": {"const": "protein"},
+              "coding_status": {"const": "not-applicable"},
+              "genetic_code": {"type": "null"},
+              "alignment_strategy": {"const": "mafft-protein"},
+              "trimming_strategy": {"enum": ["none", "trimal-columns"]},
+              "rna_structure_aware": {"const": false},
+              "source_encoding": {"const": "not-applicable"}
+            }
+          },
+          "references": {"not": {"required": ["translation_fasta"]}}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule": {
+            "properties": {
+              "type": {"enum": ["noncoding-dna", "noncoding-rna"]}
+            },
+            "required": ["type"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "query": {
+            "required": ["strand", "feature_name", "sequence_region"],
+            "properties": {
+              "kind": {"enum": ["nucleotide-fasta", "accession", "sequence-name", "gene-symbol"]},
+              "strand": {"enum": ["plus", "minus"]},
+              "feature_name": {"type": "string", "minLength": 1},
+              "sequence_region": {"type": "string", "minLength": 1}
+            }
+          },
+          "molecule": {
+            "properties": {
+              "analysis_kind": {"const": "nucleotide"},
+              "coding_status": {"const": "not-applicable"},
+              "genetic_code": {"type": "null"},
+              "alignment_strategy": {"const": "mafft-nucleotide"},
+              "trimming_strategy": {"enum": ["none", "trimal-columns"]}
+            }
+          },
+          "references": {"not": {"required": ["translation_fasta"]}}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule": {
+            "properties": {"type": {"const": "noncoding-dna"}},
+            "required": ["type"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "molecule": {
+            "properties": {
+              "rna_structure_aware": {"const": false},
+              "source_encoding": {"const": "not-applicable"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule": {
+            "properties": {"type": {"const": "noncoding-rna"}},
+            "required": ["type"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "molecule": {
+            "properties": {"source_encoding": {"enum": ["rna-u", "dna-t"]}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule": {
+            "properties": {"type": {"enum": ["coding-dna", "coding-rna"]}},
+            "required": ["type"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "query": {
+            "required": ["strand", "feature_name", "sequence_region"],
+            "properties": {
+              "kind": {"enum": ["nucleotide-fasta", "accession", "sequence-name", "gene-symbol"]},
+              "strand": {"enum": ["plus", "minus"]},
+              "feature_name": {"type": "string", "minLength": 1},
+              "sequence_region": {"type": "string", "minLength": 1}
+            }
+          },
+          "molecule": {
+            "properties": {
+              "analysis_kind": {"enum": ["nucleotide", "codon"]},
+              "coding_status": {"const": "clean"},
+              "genetic_code": {"$ref": "#/$defs/deterministicGeneticCode"},
+              "alignment_strategy": {"const": "translate-mafft-backtranslate"},
+              "trimming_strategy": {"enum": ["none", "protein-mask-to-codons"]},
+              "rna_structure_aware": {"const": false}
+            }
+          },
+          "references": {"required": ["translation_fasta"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule": {
+            "properties": {"type": {"const": "coding-dna"}},
+            "required": ["type"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "molecule": {
+            "properties": {"source_encoding": {"const": "not-applicable"}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule": {
+            "properties": {"type": {"const": "coding-rna"}},
+            "required": ["type"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "molecule": {
+            "properties": {"source_encoding": {"enum": ["rna-u", "dna-t"]}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule": {
+            "properties": {"analysis_kind": {"const": "codon"}},
+            "required": ["analysis_kind"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "molecule": {
+            "properties": {
+              "alignment_strategy": {"const": "translate-mafft-backtranslate"},
+              "trimming_strategy": {"enum": ["none", "protein-mask-to-codons"]}
+            }
+          },
+          "tree": {
+            "properties": {
+              "mode": {"const": "accurate"},
+              "tool": {"const": "iqtree2"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule": {
+            "properties": {
+              "type": {"const": "noncoding-rna"},
+              "rna_structure_aware": {"const": true}
+            },
+            "required": ["type", "rna_structure_aware"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "alignment": {"properties": {"mode": {"const": "qinsi"}}}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "alignment": {
+            "properties": {"mode": {"const": "qinsi"}},
+            "required": ["mode"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "molecule": {
+            "properties": {
+              "type": {"const": "noncoding-rna"},
+              "rna_structure_aware": {"const": true}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule": {
+            "properties": {"trimming_strategy": {"const": "none"}},
+            "required": ["trimming_strategy"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "trimming": {
+            "properties": {"enabled": {"const": false}}
+          }
+        }
+      },
+      "else": {
+        "required": ["trimming"],
+        "properties": {
+          "trimming": {
+            "properties": {"enabled": {"const": true}},
+            "required": ["enabled"]
+          }
+        }
+      }
+    }
+  ]
+}

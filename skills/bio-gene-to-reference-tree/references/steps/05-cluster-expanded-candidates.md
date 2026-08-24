@@ -6,23 +6,23 @@ Read only when the approved size trigger is crossed or the user explicitly reque
 
 ## Required inputs
 
-- the full candidate pool and pre-clustering selection proposal;
+- the full molecule-matched candidate pool, declared analysis space, and pre-clustering selection proposal;
 - `analysis_group` values that distinguish `study`, `expanded`, and `outgroup`, kept separate from biological `role=ingroup|outgroup`;
 - approved identity, coverage, coverage-mode, thread, and representative-ranking policies;
 - a fresh output location and preserved pre-clustering plan hash.
 
 ## Procedure
 
-Cluster only records with `analysis_group=expanded` in `expanded_candidates.faa`. Never place `analysis_group=study` or `analysis_group=outgroup` records into the clustering input, regardless of biological `role`. Specify both identity and coverage; `-c 0.7` means coverage, not 70% identity.
+Cluster only records with `analysis_group=expanded` in `expanded_candidates.faa` for protein or `expanded_candidates.fna` for nucleotide/CDS. Never place `analysis_group=study` or `analysis_group=outgroup` records into the clustering input, regardless of biological `role`. Verify the MMseqs2 input/database type and keep protein and nucleotide pools separate. Specify both identity and coverage; `-c 0.7` means coverage, not 70% identity.
 
 Use this full-length starting profile unless the objective justifies another value:
 
 ```text
-mmseqs easy-linclust expanded_candidates.faa clusters mmseqs_tmp \
+mmseqs easy-linclust <expanded_candidates.faa|expanded_candidates.fna> clusters mmseqs_tmp \
   --min-seq-id 0.95 -c 0.8 --cov-mode 0 --threads <fixed>
 ```
 
-`--cov-mode 0` measures coverage against the longer sequence and is a reasonable full-length default. Use target-oriented coverage only for a documented fragment use case. Record the exact MMseqs2 version and argv.
+`--cov-mode 0` measures coverage against the longer sequence and is a reasonable full-length default. Use target-oriented coverage only for a documented fragment use case. Record the exact MMseqs2 version, argv, molecule/input type, and database/index provenance; do not rely on a translated mode unless it was explicitly reviewed.
 
 Preserve every representative/member mapping, accession, TaxID, biological `role`, `analysis_group`, and `cluster_id`. Within each cluster, choose the representative by the same reviewed/canonical/relationship/coverage ordering used for selection. Do not silently erase unique taxa, alleles, biologically meaningful copies, or rejected members.
 
@@ -33,15 +33,16 @@ Re-import cluster membership, apply `MMSEQS_CLUSTER_REDUNDANT` where appropriate
 - immutable MMseqs2 input FASTA, native cluster output, and representative/member mapping;
 - version, exact argv, threads, exit status, and output hashes;
 - candidate TSV with preserved `cluster_id` and representative fields;
-- re-planned selected/rejected tables, reference FASTA, and new plan hash.
+- re-planned selected/rejected tables, molecule-matched reference FASTA, updated CDS/RNA mapping where applicable, and new plan hash.
 
 ## Review gate and stop conditions
 
-Return to the reference/outgroup approval gate after clustering. Stop if clustering touches a protected `analysis_group`, removes the only member of a required taxon, cannot reproduce membership, or lacks an explicit identity/coverage/cov-mode triplet.
+Return to the reference/outgroup approval gate after clustering. Stop if clustering mixes molecule types, touches a protected `analysis_group`, breaks a CDS↔translation or RNA source↔derivative mapping, removes the only member of a required taxon, cannot reproduce membership, or lacks an explicit identity/coverage/cov-mode triplet.
 
 ## Supporting references
 
 - [Tool and executable boundaries](../tool-routing.md)
+- [Sequence-type and no-fallback rules](../sequence-type-routing.md)
 - [Workflow Gate 2 and approval invalidation](../workflow.md#gate-2-reference-and-outgroup-approval)
 - [Plan and provenance contract](../output-contract.md)
 

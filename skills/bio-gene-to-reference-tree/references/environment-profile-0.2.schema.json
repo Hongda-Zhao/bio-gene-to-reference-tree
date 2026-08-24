@@ -1,0 +1,532 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bio-gene-to-reference-tree:environment-profile:0.2",
+  "title": "Gene-to-reference-tree environment profile 0.2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_id", "intent", "inputs", "capabilities", "permissions", "compute", "requirements"],
+  "properties": {
+    "schema_version": {"const": "0.2"},
+    "profile_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+    "intent": {"enum": ["planning", "quick", "accurate", "auto", "visualization"]},
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind", "query_resolved", "query_location", "candidates_location",
+        "cluster_mapping_location", "alignment_location", "tree_location", "tree_root_state",
+        "metadata_location", "candidate_count", "taxdump_location", "sequence_database_location",
+        "sequence_database_format", "query_molecule", "candidates_molecule", "candidate_bundle_kind", "alignment_kind",
+        "tree_data_kind", "sequence_database_molecule", "cached_literature"
+      ],
+      "properties": {
+        "query_kind": {"enum": ["accession-or-name", "public-sequence", "unpublished-sequence"]},
+        "query_resolved": {"type": "boolean"},
+        "query_location": {"$ref": "#/$defs/location"},
+        "candidates_location": {"$ref": "#/$defs/location"},
+        "cluster_mapping_location": {"$ref": "#/$defs/location"},
+        "alignment_location": {"$ref": "#/$defs/location"},
+        "tree_location": {"$ref": "#/$defs/location"},
+        "tree_root_state": {"enum": ["none", "unrooted", "rooted"]},
+        "metadata_location": {"$ref": "#/$defs/location"},
+        "candidate_count": {"type": ["integer", "null"], "minimum": 0},
+        "taxdump_location": {"$ref": "#/$defs/location"},
+        "sequence_database_location": {"$ref": "#/$defs/location"},
+        "sequence_database_format": {"enum": ["none", "blast", "mmseqs2", "both"]},
+        "query_molecule": {"$ref": "#/$defs/queryMolecule"},
+        "candidates_molecule": {"$ref": "#/$defs/candidateMolecule"},
+        "candidate_bundle_kind": {"$ref": "#/$defs/candidateBundleKind"},
+        "alignment_kind": {"$ref": "#/$defs/dataKind"},
+        "tree_data_kind": {"$ref": "#/$defs/dataKind"},
+        "sequence_database_molecule": {"enum": ["none", "protein", "nucleotide", "mixed", "unknown"]},
+        "cached_literature": {"type": "boolean"}
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compute_shell", "host_shell", "database_lookup", "literature_search", "file_transfer", "compute_tree_io", "host_tree_io", "web_upload"],
+      "properties": {
+        "compute_shell": {"type": "boolean"},
+        "host_shell": {"type": "boolean"},
+        "database_lookup": {"type": "boolean"},
+        "literature_search": {"type": "boolean"},
+        "file_transfer": {"type": "boolean"},
+        "compute_tree_io": {"type": "boolean"},
+        "host_tree_io": {"type": "boolean"},
+        "web_upload": {"type": "boolean"}
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["public_database_network", "remote_sequence_submission", "literature_network", "itol_upload"],
+      "properties": {
+        "public_database_network": {"type": "boolean"},
+        "remote_sequence_submission": {"type": "boolean"},
+        "literature_network": {"type": "boolean"},
+        "itol_upload": {"type": "boolean"}
+      }
+    },
+    "compute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "scheduler", "threads", "memory_gb"],
+      "properties": {
+        "target": {"enum": ["local", "hpc", "ssh", "host-only"]},
+        "scheduler": {"enum": ["none", "pbs", "slurm", "lsf", "other"]},
+        "threads": {"type": "integer", "minimum": 1},
+        "memory_gb": {"type": ["number", "null"], "exclusiveMinimum": 0}
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trimming", "exact_taxonomy", "rooted_tree", "visualization", "current_literature",
+        "report", "clustering_trigger", "analysis_kind", "genetic_code", "coding_status",
+        "alignment_strategy", "trimming_strategy", "rna_structure_aware"
+      ],
+      "properties": {
+        "trimming": {"type": "boolean"},
+        "exact_taxonomy": {"type": "boolean"},
+        "rooted_tree": {"type": "boolean"},
+        "visualization": {"enum": ["none", "local", "itol", "either"]},
+        "current_literature": {"type": "boolean"},
+        "report": {"type": "boolean"},
+        "clustering_trigger": {"type": "integer", "minimum": 1},
+        "analysis_kind": {"enum": ["protein", "nucleotide", "codon", "auto"]},
+        "genetic_code": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/geneticCode"}]},
+        "coding_status": {"enum": ["not-applicable", "clean", "disrupted", "unknown"]},
+        "alignment_strategy": {"enum": ["auto", "mafft-protein", "mafft-nucleotide", "translate-mafft-backtranslate", "macse", "precomputed"]},
+        "trimming_strategy": {"enum": ["none", "trimal-columns", "protein-mask-to-codons", "precomputed"]},
+        "rna_structure_aware": {"type": "boolean"}
+      }
+    }
+  },
+  "$defs": {
+    "location": {"enum": ["absent", "host", "compute-target", "both"]},
+    "queryMolecule": {"enum": ["protein", "coding-dna", "coding-rna", "noncoding-dna", "noncoding-rna", "nucleotide-ambiguous", "unknown"]},
+    "candidateMolecule": {"enum": ["absent", "protein", "coding-dna", "coding-rna", "noncoding-dna", "noncoding-rna", "mixed", "unknown"]},
+    "candidateBundleKind": {
+      "enum": [
+        "absent",
+        "protein-fasta-metadata",
+        "noncoding-nucleotide-fasta-metadata",
+        "clean-cds-translations-metadata",
+        "disrupted-cds-metadata",
+        "unknown"
+      ]
+    },
+    "dataKind": {"enum": ["absent", "protein", "nucleotide", "codon", "unknown"]},
+    "geneticCode": {
+      "enum": [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 16, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
+    },
+    "codingRequirements": {
+      "properties": {
+        "analysis_kind": {"enum": ["nucleotide", "codon", "auto"]},
+        "genetic_code": {"$ref": "#/$defs/geneticCode"},
+        "coding_status": {"enum": ["clean", "disrupted", "unknown"]},
+        "alignment_strategy": {"enum": ["auto", "translate-mafft-backtranslate", "macse", "precomputed"]},
+        "trimming_strategy": {"enum": ["none", "protein-mask-to-codons", "precomputed"]},
+        "rna_structure_aware": {"const": false}
+      }
+    },
+    "codingArtifactKinds": {
+      "oneOf": [
+        {
+          "properties": {
+            "requirements": {"properties": {"analysis_kind": {"const": "nucleotide"}}},
+            "inputs": {
+              "properties": {
+                "alignment_kind": {"enum": ["absent", "codon"]},
+                "tree_data_kind": {"enum": ["absent", "nucleotide"]}
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "requirements": {"properties": {"analysis_kind": {"enum": ["codon", "auto"]}}},
+            "inputs": {
+              "properties": {
+                "alignment_kind": {"enum": ["absent", "codon"]},
+                "tree_data_kind": {"enum": ["absent", "codon"]}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "codingBundleKinds": {
+      "oneOf": [
+        {
+          "properties": {
+            "requirements": {"properties": {"coding_status": {"const": "clean"}}},
+            "inputs": {
+              "properties": {
+                "candidate_bundle_kind": {
+                  "enum": ["absent", "clean-cds-translations-metadata"]
+                }
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "requirements": {"properties": {"coding_status": {"const": "disrupted"}}},
+            "inputs": {
+              "properties": {
+                "candidate_bundle_kind": {"enum": ["absent", "disrupted-cds-metadata"]}
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "requirements": {"properties": {"coding_status": {"const": "unknown"}}},
+            "inputs": {
+              "properties": {
+                "candidate_bundle_kind": {"enum": ["absent", "unknown"]}
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "inputs": {
+            "properties": {"query_resolved": {"const": true}},
+            "required": ["query_resolved"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "properties": {"query_location": {"not": {"const": "absent"}}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "inputs": {
+            "properties": {"candidates_location": {"const": "absent"}},
+            "required": ["candidates_location"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "properties": {
+              "candidates_molecule": {"const": "absent"},
+              "candidate_bundle_kind": {"const": "absent"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "inputs": {
+            "properties": {
+              "candidates_molecule": {"not": {"const": "absent"}},
+              "candidate_bundle_kind": {"not": {"const": "absent"}}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "inputs": {
+            "properties": {"alignment_location": {"const": "absent"}},
+            "required": ["alignment_location"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {"properties": {"alignment_kind": {"const": "absent"}}}
+        }
+      },
+      "else": {
+        "properties": {
+          "inputs": {"properties": {"alignment_kind": {"not": {"const": "absent"}}}}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "inputs": {
+            "properties": {"tree_location": {"const": "absent"}},
+            "required": ["tree_location"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "properties": {
+              "tree_root_state": {"const": "none"},
+              "tree_data_kind": {"const": "absent"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "inputs": {
+            "properties": {
+              "tree_root_state": {"enum": ["unrooted", "rooted"]},
+              "tree_data_kind": {"not": {"const": "absent"}}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "inputs": {
+            "properties": {"sequence_database_location": {"const": "absent"}},
+            "required": ["sequence_database_location"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "properties": {
+              "sequence_database_format": {"const": "none"},
+              "sequence_database_molecule": {"const": "none"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "inputs": {
+            "properties": {
+              "sequence_database_format": {"enum": ["blast", "mmseqs2", "both"]},
+              "sequence_database_molecule": {"enum": ["protein", "nucleotide", "mixed", "unknown"]}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "compute": {
+            "properties": {"target": {"const": "hpc"}},
+            "required": ["target"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "compute": {"properties": {"scheduler": {"const": "none"}}}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "requirements": {
+            "properties": {"trimming_strategy": {"const": "none"}},
+            "required": ["trimming_strategy"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "requirements": {"properties": {"trimming": {"const": false}}}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "requirements": {
+            "properties": {
+              "trimming_strategy": {"enum": ["trimal-columns", "protein-mask-to-codons"]}
+            },
+            "required": ["trimming_strategy"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "requirements": {"properties": {"trimming": {"const": true}}}
+        }
+      }
+    },
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "inputs": {
+              "properties": {
+                "query_molecule": {"const": "protein"},
+                "candidates_molecule": {"enum": ["absent", "protein"]},
+                "candidate_bundle_kind": {"enum": ["absent", "protein-fasta-metadata"]},
+                "alignment_kind": {"enum": ["absent", "protein"]},
+                "tree_data_kind": {"enum": ["absent", "protein"]}
+              }
+            },
+            "requirements": {
+              "properties": {
+                "analysis_kind": {"enum": ["protein", "auto"]},
+                "genetic_code": {"type": "null"},
+                "coding_status": {"const": "not-applicable"},
+                "alignment_strategy": {"enum": ["auto", "mafft-protein", "precomputed"]},
+                "trimming_strategy": {"enum": ["none", "trimal-columns", "precomputed"]},
+                "rna_structure_aware": {"const": false}
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "inputs": {
+              "properties": {
+                "query_molecule": {"const": "noncoding-dna"},
+                "candidates_molecule": {"enum": ["absent", "noncoding-dna"]},
+                "candidate_bundle_kind": {"enum": ["absent", "noncoding-nucleotide-fasta-metadata"]},
+                "alignment_kind": {"enum": ["absent", "nucleotide"]},
+                "tree_data_kind": {"enum": ["absent", "nucleotide"]}
+              }
+            },
+            "requirements": {
+              "properties": {
+                "analysis_kind": {"enum": ["nucleotide", "auto"]},
+                "genetic_code": {"type": "null"},
+                "coding_status": {"const": "not-applicable"},
+                "alignment_strategy": {"enum": ["auto", "mafft-nucleotide", "precomputed"]},
+                "trimming_strategy": {"enum": ["none", "trimal-columns", "precomputed"]},
+                "rna_structure_aware": {"const": false}
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "inputs": {
+              "properties": {
+                "query_molecule": {"const": "noncoding-rna"},
+                "candidates_molecule": {"enum": ["absent", "noncoding-rna"]},
+                "candidate_bundle_kind": {"enum": ["absent", "noncoding-nucleotide-fasta-metadata"]},
+                "alignment_kind": {"enum": ["absent", "nucleotide"]},
+                "tree_data_kind": {"enum": ["absent", "nucleotide"]}
+              }
+            },
+            "requirements": {
+              "properties": {
+                "analysis_kind": {"enum": ["nucleotide", "auto"]},
+                "genetic_code": {"type": "null"},
+                "coding_status": {"const": "not-applicable"},
+                "alignment_strategy": {"enum": ["auto", "mafft-nucleotide", "precomputed"]},
+                "trimming_strategy": {"enum": ["none", "trimal-columns", "precomputed"]}
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "inputs": {
+              "properties": {
+                "query_molecule": {"const": "coding-dna"},
+                "candidates_molecule": {"enum": ["absent", "coding-dna"]}
+              }
+            },
+            "requirements": {"$ref": "#/$defs/codingRequirements"}
+          },
+          "allOf": [
+            {"$ref": "#/$defs/codingArtifactKinds"},
+            {"$ref": "#/$defs/codingBundleKinds"}
+          ]
+        },
+        {
+          "properties": {
+            "inputs": {
+              "properties": {
+                "query_molecule": {"const": "coding-rna"},
+                "candidates_molecule": {"enum": ["absent", "coding-rna"]}
+              }
+            },
+            "requirements": {"$ref": "#/$defs/codingRequirements"}
+          },
+          "allOf": [
+            {"$ref": "#/$defs/codingArtifactKinds"},
+            {"$ref": "#/$defs/codingBundleKinds"}
+          ]
+        },
+        {
+          "properties": {
+            "inputs": {
+              "properties": {
+                "query_molecule": {"enum": ["unknown", "nucleotide-ambiguous"]},
+                "candidates_molecule": {"enum": ["absent", "unknown"]},
+                "candidate_bundle_kind": {"enum": ["absent", "unknown"]},
+                "alignment_kind": {"const": "absent"}
+              }
+            },
+            "requirements": {
+              "properties": {
+                "analysis_kind": {"const": "auto"},
+                "genetic_code": {"type": "null"},
+                "coding_status": {"const": "unknown"},
+                "alignment_strategy": {"const": "auto"},
+                "trimming_strategy": {"const": "none"},
+                "rna_structure_aware": {"const": false}
+              }
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "intent": {"const": "visualization"},
+                  "inputs": {
+                    "properties": {
+                      "tree_location": {"enum": ["host", "compute-target", "both"]}
+                    },
+                    "required": ["tree_location"]
+                  }
+                },
+                "required": ["intent", "inputs"]
+              },
+              "then": {
+                "properties": {
+                  "inputs": {
+                    "properties": {
+                      "tree_data_kind": {"enum": ["protein", "nucleotide", "codon"]}
+                    }
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "inputs": {
+                    "properties": {
+                      "tree_data_kind": {"const": "absent"}
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

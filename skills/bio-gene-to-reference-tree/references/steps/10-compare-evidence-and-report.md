@@ -7,7 +7,7 @@ Read after tree annotation to compare the gene tree with current evolutionary ev
 ## Required inputs
 
 - final unrooted tree, optional approved rooted copy, and support/model semantics;
-- complete sequence metadata and declared taxonomic scope;
+- complete molecule-aware sequence metadata, comparable-region definition, and declared taxonomic scope;
 - all approved hashes, commands, versions, warnings, and review decisions;
 - access to current primary literature/taxonomy, or a recorded limitation.
 
@@ -24,7 +24,7 @@ Search evidence in this order:
 
 Prefer direct relevance, adequate data scale, method transparency, and current recognized taxonomy over journal prestige alone. Label evidence as `exact-species`, `genus`, `family`, `order`, `broader`, or `taxonomy-only`. For viruses, include current ICTV taxonomy and gene/segment-specific research; qualify recombinant or reassorted segments.
 
-Create `literature_evidence.tsv` only from retrieved sources. Record DOI/PMID, year, journal, taxa, evidence/data type, method/model, topology claim, directness, conflicts, limitations, URL, and retrieval time. When a source informs alignment/trimming, also retain version, parameters, `exact`/`partial` reporting state, `explicit-none`/`not-reported` trimming state, and retained sites/fraction where reported.
+Create `literature_evidence.tsv` only from retrieved sources. Record DOI/PMID, year, journal, taxa, molecule/data architecture, evidence type, method/model, topology claim, directness, conflicts, limitations, URL, and retrieval time. When a source informs alignment/trimming, also retain version, parameters, `exact`/`partial` reporting state, `explicit-none`/`not-reported` trimming state, and retained sites/fraction where reported. A protein, direct-nucleotide, or codon precedent is comparable only to the same declared analysis architecture.
 
 Compare the gene tree qualitatively with accepted species relationships. Record agreements, unsupported nodes, and conflicts. Discordance can reflect duplication/loss, incomplete lineage sorting, introgression, horizontal transfer, recombination, alignment error, model misspecification, or incorrect orthology; it is not automatic pipeline failure.
 
@@ -34,16 +34,18 @@ Compile the completion bundle defined in [output-contract.md](../output-contract
 
 - `literature_evidence.tsv` with real citations and directness labels, or an explicit search limitation;
 - gene-tree/species-relationship comparison with conflicts and alternative explanations;
-- final report with query provenance, selection/rejections, clustering, MSA/QC, reviewed conservation assessment, inference, rooting, annotations, literature, decisions, versions, commands, and checksums;
+- final report with molecule/analysis space, comparable-region and actual search-database provenance, query resolution, selection/rejections, clustering, MSA/QC, reviewed conservation assessment, inference, rooting, annotations, literature, decisions, versions, commands, and checksums;
+- RNA source-encoding/analysis-copy receipt or CDS frame/code/translation/backtranslation/MACSE-review status when applicable;
 - all native artifacts required by the completion contract.
 
 ## Review gate and stop conditions
 
-Mark complete only when every requested artifact exists, hashes match approved decisions, support and root semantics are explicit, citations were actually retrieved, and limitations are visible. Do not fabricate a citation, taxonomy claim, tool result, or database release when a capability is unavailable.
+Mark complete only when every requested artifact exists, molecule/region/derivation hashes match approved decisions, support and root semantics are explicit, citations were actually retrieved, and limitations are visible. Do not fabricate a citation, taxonomy claim, tool result, database release, translation, or cross-analysis result when a capability is unavailable.
 
 ## Supporting references
 
 - [Recent MSA/trimming evidence catalog](../recent-msa-trimming-evidence.md)
+- [Sequence-type and provenance routing](../sequence-type-routing.md)
 - [Workflow completion contract](../workflow.md#completion-contract)
 - [Final executed-report and artifact contract](../output-contract.md)
 - [Tool, literature, and privacy boundaries](../tool-routing.md)

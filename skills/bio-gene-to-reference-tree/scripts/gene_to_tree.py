@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile a deterministic review bundle for an auditable protein gene tree.
+"""Compile a deterministic review bundle for an auditable gene tree.
 
 The helper deliberately performs no network requests and launches no external
 programs while planning.  A host agent may resolve a query and acquire candidate
@@ -23,6 +23,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tuple
 
@@ -35,15 +36,42 @@ from ncbi_taxonomy import (
 )
 
 
-VERSION = "0.3.0"
-OUTPUT_SCHEMA_VERSION = "0.3"
-ENVIRONMENT_PROFILE_SCHEMA_VERSION = "0.1"
+VERSION = "0.4.0"
+OUTPUT_SCHEMA_VERSION = "0.4"
+ENVIRONMENT_PROFILE_SCHEMA_VERSION = "0.2"
 ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION = "0.1"
-ROUTE_DECISION_SCHEMA_VERSION = "0.1"
+ROUTE_DECISION_SCHEMA_VERSION = "0.2"
+NCBI_GENETIC_CODES = frozenset(
+    {1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 16, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33}
+)
+# trimAl's current backtranslation stop-codon check uses the universal stop set.
+# Tables 1 and 11 retain that set; other codes need a reviewed codon-aware route.
+TRIMAL_BACKTRANS_GENETIC_CODES = frozenset({1, 11})
 PROTEIN_ALPHABET = frozenset("ACDEFGHIKLMNPQRSTVWYBXZJUO")
+DNA_ALPHABET = frozenset("ACGTRYSWKMBDHVN")
+RNA_U_ALPHABET = frozenset("ACGURYSWKMBDHVN")
+RNA_T_ALPHABET = DNA_ALPHABET
+STANDARD_CODON_TABLE = dict(
+    zip(
+        (a + b + c for a in "TCAG" for b in "TCAG" for c in "TCAG"),
+        "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+    )
+)
+TABLE11_START_CODONS = frozenset({"TTG", "CTG", "ATT", "ATC", "ATA", "ATG", "GTG"})
+TABLE1_START_CODONS = frozenset({"TTG", "CTG", "ATG"})
 SAFE_ID = re.compile(r"^[A-Za-z0-9_.:-]+$")
 SAFE_PROFILE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 ASCII_TAXON_ID = re.compile(r"[0-9]+")
+DATE_OR_UTC_TIMESTAMP = re.compile(
+    r"(?:[0-9]{4}-[0-9]{2}-[0-9]{2}|"
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|\+00:00))"
+)
+NCBI_TAXDUMP_SOURCE_URL = re.compile(
+    r"https://ftp\.ncbi\.nlm\.nih\.gov/pub/taxonomy/"
+    r"(?:new_taxdump/new_taxdump\.(?:tar\.gz|zip)|"
+    r"taxdump_archive/new_taxdump_[0-9]{4}-[0-9]{2}-[0-9]{2}\.zip)"
+)
 RELATION_PRIORITY = {
     "one2one_ortholog": 0,
     "ortholog": 1,
@@ -74,6 +102,20 @@ OPTIONAL_COLUMNS = (
     "accession_version",
     "gene_name",
     "protein_name",
+    "feature_name",
+    "molecule_type",
+    "genetic_code_id",
+    "reading_frame_source",
+    "strand",
+    "complete_cds",
+    "internal_stop_count",
+    "frameshift_count",
+    "translation_matches",
+    "actual_search_database",
+    "search_program",
+    "search_database_molecule",
+    "sequence_region",
+    "coordinates",
     "lineage",
     "analysis_group",
     "target_coverage",
@@ -106,6 +148,272 @@ class WorkflowError(Exception):
         self.exit_code = exit_code
 
 
+def reject_unknown_fields(
+    value: Mapping[str, Any], allowed: Iterable[str], path: str
+) -> None:
+    """Enforce request 0.3 additionalProperties=false without a dependency."""
+    unknown = sorted(set(value) - set(allowed))
+    if unknown:
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            f"{path} contains unsupported fields: {', '.join(unknown)}.",
+        )
+
+
+def require_fields(value: Mapping[str, Any], required: Iterable[str], path: str) -> None:
+    missing = sorted(set(required) - set(value))
+    if missing:
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            f"{path} is missing required fields: {', '.join(missing)}.",
+        )
+
+
+def validate_request_03_shape(request: Mapping[str, Any]) -> None:
+    """Reject fields that the published request 0.3 schema does not permit."""
+    def reject_padded_string(
+        value: Mapping[str, Any], key: str, path: str
+    ) -> None:
+        raw_value = value.get(key)
+        if isinstance(raw_value, str) and raw_value != raw_value.strip():
+            raise WorkflowError(
+                "REQUEST_SCHEMA_VIOLATION",
+                f"{path}.{key} must not contain leading or trailing whitespace.",
+            )
+
+    object_fields = {
+        "query": {
+            "kind", "path", "id", "original_value", "organism", "taxon_id",
+            "gene_name", "protein_name", "feature_name", "strand",
+            "sequence_region", "source_db", "source_release", "retrieved_at",
+        },
+        "molecule": {
+            "type", "analysis_kind", "coding_status", "genetic_code",
+            "alignment_strategy", "trimming_strategy", "rna_structure_aware",
+            "source_encoding",
+        },
+        "taxon_scope": {"ingroup", "outgroup"},
+        "privacy": {"remote_search_allowed", "unpublished_sequence"},
+        "references": {
+            "strategy", "candidate_table", "candidate_fasta", "translation_fasta",
+            "discovery_tiers",
+        },
+        "selection": {
+            "min_query_coverage", "min_target_coverage", "min_length_ratio",
+            "max_length_ratio", "max_per_taxon", "max_references",
+            "min_ingroup_taxa", "require_outgroup", "outgroup_count",
+            "allow_paralogs",
+        },
+        "clustering": {
+            "mode", "tool", "trigger_min_sequences", "algorithm", "min_seq_id",
+            "coverage", "coverage_mode", "threads", "preserve_analysis_groups",
+        },
+        "alignment": {"tool", "mode", "threads"},
+        "trimming": {
+            "enabled", "tool", "primary_profile", "profiles",
+            "min_retained_fraction", "compare_topologies",
+        },
+        "tree": {
+            "mode", "tool", "model", "threads", "seed", "rooting", "support",
+        },
+        "taxonomy": {
+            "enabled", "source", "match_mode", "names_dmp", "nodes_dmp",
+            "snapshot", "source_url", "retrieved_at",
+        },
+        "itol": {"enabled", "dataset_label", "colors", "generate_ranges_after_tree_qc"},
+        "literature": {
+            "enabled", "years_back", "include_foundational",
+            "taxon_fallback_ranks", "sources",
+        },
+    }
+    root_required = {
+        "schema_version", "project_id", "objective", "query", "molecule",
+        "taxon_scope", "privacy", "references", "selection", "alignment", "tree",
+    }
+    require_fields(request, root_required, "request")
+    reject_unknown_fields(
+        request,
+        {
+            "schema_version", "project_id", "objective", "sequence_context", "query",
+            "molecule", "taxon_scope", "privacy", "references", "selection",
+            "clustering", "alignment", "trimming", "tree", "taxonomy", "itol",
+            "literature",
+        },
+        "request",
+    )
+    required_fields = {
+        "query": {
+            "kind", "path", "id", "organism", "source_db", "source_release",
+            "retrieved_at",
+        },
+        "molecule": {
+            "type", "analysis_kind", "coding_status", "genetic_code",
+            "alignment_strategy", "trimming_strategy", "rna_structure_aware",
+            "source_encoding",
+        },
+        "taxon_scope": {"ingroup", "outgroup"},
+        "privacy": {"remote_search_allowed"},
+        "references": {"strategy", "candidate_table", "candidate_fasta"},
+        "selection": {
+            "min_query_coverage", "min_target_coverage", "min_length_ratio",
+            "max_length_ratio", "max_per_taxon", "max_references",
+            "min_ingroup_taxa", "require_outgroup", "outgroup_count",
+            "allow_paralogs",
+        },
+        "alignment": {"tool", "mode"},
+        "tree": {"mode", "tool", "rooting", "support"},
+    }
+    for key, allowed in object_fields.items():
+        value = request.get(key)
+        if key in request and not isinstance(value, dict):
+            raise WorkflowError(
+                "REQUEST_SCHEMA_VIOLATION",
+                f"request.{key} must be a JSON object when it is present.",
+            )
+        if isinstance(value, dict):
+            reject_unknown_fields(value, allowed, f"request.{key}")
+            if key in required_fields:
+                require_fields(value, required_fields[key], f"request.{key}")
+
+    trimming = request.get("trimming")
+    if isinstance(trimming, dict):
+        require_fields(trimming, {"enabled"}, "request.trimming")
+        if trimming.get("enabled") is True:
+            require_fields(
+                trimming,
+                {"tool", "primary_profile", "profiles"},
+                "request.trimming",
+            )
+    taxonomy = request.get("taxonomy")
+    if isinstance(taxonomy, dict):
+        require_fields(taxonomy, {"enabled"}, "request.taxonomy")
+    tree = request.get("tree")
+    if isinstance(tree, dict) and "support" in tree and not isinstance(
+        tree.get("support"), dict
+    ):
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            "request.tree.support must be a JSON object.",
+        )
+    if isinstance(tree, dict) and isinstance(tree.get("support"), dict):
+        require_fields(tree["support"], {"method"}, "request.tree.support")
+        if tree.get("mode") == "accurate":
+            require_fields(
+                tree["support"],
+                {"replicates", "sh_alrt"},
+                "request.tree.support",
+            )
+
+    if isinstance(trimming, dict) and isinstance(trimming.get("profiles"), list):
+        for index, profile in enumerate(trimming["profiles"]):
+            if not isinstance(profile, dict):
+                raise WorkflowError(
+                    "REQUEST_SCHEMA_VIOLATION",
+                    f"request.trimming.profiles[{index}] must be a JSON object.",
+                )
+            require_fields(
+                profile,
+                {"id", "gap_threshold"},
+                f"request.trimming.profiles[{index}]",
+            )
+            reject_unknown_fields(
+                profile,
+                {"id", "gap_threshold"},
+                f"request.trimming.profiles[{index}]",
+            )
+    if isinstance(tree, dict) and isinstance(tree.get("support"), dict):
+        reject_unknown_fields(
+            tree["support"],
+            {"method", "replicates", "sh_alrt", "bnni"},
+            "request.tree.support",
+        )
+    itol = request.get("itol")
+    if isinstance(itol, dict) and "colors" in itol and not isinstance(
+        itol.get("colors"), dict
+    ):
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            "request.itol.colors must be a JSON object.",
+        )
+    if isinstance(itol, dict) and isinstance(itol.get("colors"), dict):
+        require_fields(
+            itol["colors"],
+            {"study", "expanded", "outgroup"},
+            "request.itol.colors",
+        )
+        reject_unknown_fields(
+            itol["colors"],
+            {"study", "expanded", "outgroup"},
+            "request.itol.colors",
+        )
+
+    exact_string_fields = {
+        "request": ("schema_version", "objective", "sequence_context"),
+        "query": ("kind", "id", "taxon_id", "strand"),
+        "molecule": (
+            "type",
+            "analysis_kind",
+            "coding_status",
+            "alignment_strategy",
+            "trimming_strategy",
+            "source_encoding",
+        ),
+        "references": ("strategy",),
+        "clustering": ("mode", "tool", "algorithm"),
+        "alignment": ("tool", "mode"),
+        "trimming": ("tool", "primary_profile"),
+        "tree": ("mode", "tool", "model", "rooting"),
+        "taxonomy": ("source", "match_mode", "source_url"),
+    }
+    for object_name, fields in exact_string_fields.items():
+        value = request if object_name == "request" else request.get(object_name)
+        if isinstance(value, dict):
+            for field in fields:
+                reject_padded_string(value, field, f"request.{object_name}")
+    if isinstance(tree, dict) and isinstance(tree.get("support"), dict):
+        reject_padded_string(tree["support"], "method", "request.tree.support")
+    if isinstance(trimming, dict) and isinstance(trimming.get("profiles"), list):
+        for index, profile in enumerate(trimming["profiles"]):
+            if isinstance(profile, dict):
+                reject_padded_string(
+                    profile, "id", f"request.trimming.profiles[{index}]"
+                )
+    clustering = request.get("clustering")
+    if isinstance(clustering, dict) and isinstance(
+        clustering.get("preserve_analysis_groups"), list
+    ):
+        for index, group in enumerate(clustering["preserve_analysis_groups"]):
+            if isinstance(group, str) and group != group.strip():
+                raise WorkflowError(
+                    "REQUEST_SCHEMA_VIOLATION",
+                    "request.clustering.preserve_analysis_groups"
+                    f"[{index}] must not contain leading or trailing whitespace.",
+                )
+    if isinstance(itol, dict) and isinstance(itol.get("colors"), dict):
+        for role in ("study", "expanded", "outgroup"):
+            reject_padded_string(itol["colors"], role, "request.itol.colors")
+
+
+def validate_date_or_utc_timestamp(value: Any, path: str) -> None:
+    if not isinstance(value, str) or DATE_OR_UTC_TIMESTAMP.fullmatch(value) is None:
+        raise WorkflowError(
+            "INVALID_PROVENANCE_DATE",
+            f"{path} must be YYYY-MM-DD or an ISO UTC timestamp ending in Z or +00:00.",
+        )
+    try:
+        if "T" not in value:
+            date.fromisoformat(value)
+        else:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.utcoffset() != timedelta(0):
+                raise ValueError("timestamp is not UTC")
+    except ValueError as exc:
+        raise WorkflowError(
+            "INVALID_PROVENANCE_DATE",
+            f"{path} is not a real calendar date or UTC timestamp.",
+        ) from exc
+
+
 @dataclass(frozen=True)
 class Candidate:
     accession: str
@@ -128,6 +436,20 @@ class Candidate:
     accession_version: str = ""
     gene_name: str = ""
     protein_name: str = ""
+    feature_name: str = ""
+    molecule_type: str = ""
+    genetic_code_id: str = ""
+    reading_frame_source: str = ""
+    strand: str = ""
+    complete_cds: str = ""
+    internal_stop_count: str = ""
+    frameshift_count: str = ""
+    translation_matches: str = ""
+    actual_search_database: str = ""
+    search_program: str = ""
+    search_database_molecule: str = ""
+    sequence_region: str = ""
+    coordinates: str = ""
     lineage: str = ""
     analysis_group: str = ""
     target_coverage: str = ""
@@ -187,6 +509,20 @@ class Candidate:
             "accession_version": self.accession_version,
             "gene_name": self.gene_name,
             "protein_name": self.protein_name,
+            "feature_name": self.feature_name,
+            "molecule_type": self.molecule_type,
+            "genetic_code_id": self.genetic_code_id,
+            "reading_frame_source": self.reading_frame_source,
+            "strand": self.strand,
+            "complete_cds": self.complete_cds,
+            "internal_stop_count": self.internal_stop_count,
+            "frameshift_count": self.frameshift_count,
+            "translation_matches": self.translation_matches,
+            "actual_search_database": self.actual_search_database,
+            "search_program": self.search_program,
+            "search_database_molecule": self.search_database_molecule,
+            "sequence_region": self.sequence_region,
+            "coordinates": self.coordinates,
             "lineage": self.lineage,
             "analysis_group": self.analysis_role,
             "target_coverage": self.target_coverage,
@@ -304,7 +640,31 @@ def resolve_input_path(request_path: Path, configured: str, label: str) -> Path:
     return candidate
 
 
-def parse_fasta(path: Path, label: str) -> List[Tuple[str, str, str]]:
+def parse_fasta(
+    path: Path,
+    label: str,
+    *,
+    molecule_type: str = "protein",
+    source_encoding: str = "not-applicable",
+) -> List[Tuple[str, str, str]]:
+    alphabet_by_type = {
+        "protein": PROTEIN_ALPHABET,
+        "coding-dna": DNA_ALPHABET,
+        "noncoding-dna": DNA_ALPHABET,
+    }
+    if molecule_type in {"coding-rna", "noncoding-rna"}:
+        alphabet = {
+            "rna-u": RNA_U_ALPHABET,
+            "dna-t": RNA_T_ALPHABET,
+        }.get(source_encoding)
+    else:
+        alphabet = alphabet_by_type.get(molecule_type)
+    if alphabet is None:
+        raise WorkflowError(
+            "INVALID_MOLECULE_TYPE",
+            f"Cannot validate {label} FASTA for molecule type '{molecule_type}' with "
+            f"source_encoding='{source_encoding}'.",
+        )
     records: List[Tuple[str, str, str]] = []
     current_header: str | None = None
     chunks: List[str] = []
@@ -322,12 +682,16 @@ def parse_fasta(path: Path, label: str) -> List[Tuple[str, str, str]]:
         sequence = "".join(chunks).replace(" ", "").replace("\t", "").upper()
         if not sequence:
             raise WorkflowError("EMPTY_SEQUENCE", f"{label} FASTA record '{identifier}' has no sequence.")
-        invalid = sorted(set(sequence) - PROTEIN_ALPHABET)
+        invalid = sorted(set(sequence) - alphabet)
         if invalid:
             shown = "".join(invalid)
+            molecule_label = "protein" if molecule_type == "protein" else molecule_type
             raise WorkflowError(
-                "INVALID_PROTEIN_SEQUENCE",
-                f"{label} FASTA record '{identifier}' contains unsupported symbols: {shown}",
+                "INVALID_PROTEIN_SEQUENCE"
+                if molecule_type == "protein"
+                else "INVALID_NUCLEOTIDE_SEQUENCE",
+                f"{label} FASTA record '{identifier}' is declared {molecule_label} but contains "
+                f"unsupported symbols: {shown}",
             )
         records.append((identifier, current_header, sequence))
         current_header = None
@@ -377,6 +741,23 @@ def parse_bool(value: str, accession: str, field: str) -> bool:
     raise WorkflowError("INVALID_CANDIDATE_TABLE", f"{accession}: {field} must be true or false.")
 
 
+def translate_clean_cds(sequence: str, genetic_code: int) -> Tuple[str, int]:
+    """Translate a complete code-1/11 CDS; ambiguous codons remain explicit as X."""
+    dna = sequence.replace("U", "T")
+    start_codons = TABLE11_START_CODONS if genetic_code == 11 else TABLE1_START_CODONS
+    residues: List[str] = []
+    for index in range(0, len(dna), 3):
+        codon = dna[index : index + 3]
+        residue = STANDARD_CODON_TABLE.get(codon, "X")
+        if index == 0 and codon in start_codons:
+            residue = "M"
+        residues.append(residue)
+    internal_stops = sum(residue == "*" for residue in residues[:-1])
+    if residues and residues[-1] == "*":
+        residues.pop()
+    return "".join(residues), internal_stops
+
+
 def parse_finite_float(value: str, accession: str, field: str, minimum: float = 0.0) -> float:
     try:
         result = float(value)
@@ -421,6 +802,16 @@ def parse_candidate_table(path: Path, sequences: Mapping[str, str]) -> List[Cand
                 raise WorkflowError(
                     "INVALID_CANDIDATE_TABLE",
                     "Candidate table is missing columns: " + ", ".join(missing),
+                )
+            unsupported = sorted(
+                set(reader.fieldnames) - set(REQUIRED_COLUMNS + OPTIONAL_COLUMNS)
+            )
+            if unsupported:
+                raise WorkflowError(
+                    "UNSUPPORTED_CANDIDATE_COLUMNS",
+                    "Candidate table contains unsupported columns that would not be preserved: "
+                    + ", ".join(unsupported)
+                    + ". Use a documented column, notes, or a separate acquisition record.",
                 )
             for row_number, raw in enumerate(reader, start=2):
                 if None in raw:
@@ -525,6 +916,20 @@ def parse_candidate_table(path: Path, sequences: Mapping[str, str]) -> List[Cand
                         accession_version=row["accession_version"],
                         gene_name=row["gene_name"],
                         protein_name=row["protein_name"],
+                        feature_name=row["feature_name"],
+                        molecule_type=row["molecule_type"],
+                        genetic_code_id=row["genetic_code_id"],
+                        reading_frame_source=row["reading_frame_source"],
+                        strand=row["strand"],
+                        complete_cds=row["complete_cds"],
+                        internal_stop_count=row["internal_stop_count"],
+                        frameshift_count=row["frameshift_count"],
+                        translation_matches=row["translation_matches"],
+                        actual_search_database=row["actual_search_database"],
+                        search_program=row["search_program"],
+                        search_database_molecule=row["search_database_molecule"],
+                        sequence_region=row["sequence_region"],
+                        coordinates=row["coordinates"],
                         lineage=row["lineage"],
                         analysis_group=row["analysis_group"],
                         target_coverage=normalize_optional_float(
@@ -575,6 +980,316 @@ def parse_candidate_table(path: Path, sequences: Mapping[str, str]) -> List[Cand
             "A taxon cannot be both ingroup and outgroup: " + ", ".join(conflicts),
         )
     return candidates
+
+
+def validate_molecule_bundle(
+    candidates: Sequence[Candidate],
+    config: Mapping[str, Any],
+    translation_sequences: Mapping[str, str] | None,
+) -> None:
+    """Validate molecule declarations without ever inferring them from sequence letters."""
+    if config["request_schema_version"] != "0.3":
+        return
+    molecule = config["molecule"]
+    expected = molecule["type"]
+    mismatches = [
+        candidate.accession
+        for candidate in candidates
+        if candidate.molecule_type != expected
+    ]
+    if mismatches:
+        raise WorkflowError(
+            "MIXED_MOLECULE_INPUT_UNSUPPORTED",
+            "Every candidate row must declare molecule_type exactly matching the request; "
+            "mismatches: " + ", ".join(sorted(mismatches)),
+        )
+    provenance_missing: List[str] = []
+    for candidate in candidates:
+        validate_date_or_utc_timestamp(
+            candidate.retrieved_at, f"candidate {candidate.accession} retrieved_at"
+        )
+        missing = []
+        if not candidate.source_release:
+            missing.append("source_release")
+        if not candidate.retrieved_at:
+            missing.append("retrieved_at")
+        if not candidate.actual_search_database:
+            missing.append("actual_search_database")
+        if not candidate.search_program:
+            missing.append("search_program")
+        if not candidate.search_database_molecule:
+            missing.append("search_database_molecule")
+        if expected != "protein":
+            if not candidate.feature_name:
+                missing.append("feature_name")
+            if not candidate.sequence_region:
+                missing.append("sequence_region")
+            if candidate.strand not in {"plus", "minus"}:
+                missing.append("strand")
+        if missing:
+            provenance_missing.append(
+                f"{candidate.accession} ({', '.join(missing)})"
+            )
+    if provenance_missing:
+        raise WorkflowError(
+            "MOLECULE_PROVENANCE_REQUIRED",
+            "Request 0.3 candidate rows require the actual search database, search program, "
+            "and database molecule (or an explicit not-searched local-bundle value); "
+            "nucleotide rows also require feature, "
+            "comparable region, and strand provenance: " + "; ".join(provenance_missing),
+        )
+    allowed_search_pairs = {
+        "blastp": {"protein"},
+        "blastn": {"nucleotide"},
+        "blastx": {"protein"},
+        "tblastn": {"nucleotide"},
+        "tblastx": {"nucleotide"},
+        "mmseqs2": {"protein", "nucleotide"},
+        "curated-provider": {"protein", "nucleotide"},
+        "not-searched": {"not-applicable"},
+    }
+    for candidate in candidates:
+        allowed_database_types = allowed_search_pairs.get(candidate.search_program)
+        if (
+            allowed_database_types is None
+            or candidate.search_database_molecule not in allowed_database_types
+        ):
+            raise WorkflowError(
+                "SEARCH_DATABASE_PROVENANCE_INVALID",
+                f"{candidate.accession}: search_program and search_database_molecule do not "
+                "form a supported explicit pair.",
+            )
+        if candidate.search_program == "not-searched":
+            if candidate.actual_search_database != "local-bundle:not-searched":
+                raise WorkflowError(
+                    "SEARCH_DATABASE_PROVENANCE_INVALID",
+                    f"{candidate.accession}: not-searched rows must use "
+                    "actual_search_database='local-bundle:not-searched'.",
+                )
+            continue
+        molecule_specific_pairs = {
+            "protein": {
+                ("blastp", "protein"),
+                ("tblastn", "nucleotide"),
+                ("mmseqs2", "protein"),
+                ("curated-provider", "protein"),
+            },
+            "noncoding-dna": {
+                ("blastn", "nucleotide"),
+                ("mmseqs2", "nucleotide"),
+                ("curated-provider", "nucleotide"),
+            },
+            "noncoding-rna": {
+                ("blastn", "nucleotide"),
+                ("mmseqs2", "nucleotide"),
+                ("curated-provider", "nucleotide"),
+            },
+            "coding-dna": {
+                ("blastn", "nucleotide"),
+                ("blastx", "protein"),
+                ("blastp", "protein"),
+                ("tblastn", "nucleotide"),
+                ("tblastx", "nucleotide"),
+                ("mmseqs2", "protein"),
+                ("mmseqs2", "nucleotide"),
+                ("curated-provider", "nucleotide"),
+            },
+            "coding-rna": {
+                ("blastn", "nucleotide"),
+                ("blastx", "protein"),
+                ("blastp", "protein"),
+                ("tblastn", "nucleotide"),
+                ("tblastx", "nucleotide"),
+                ("mmseqs2", "protein"),
+                ("mmseqs2", "nucleotide"),
+                ("curated-provider", "nucleotide"),
+            },
+        }[expected]
+        if (candidate.search_program, candidate.search_database_molecule) not in molecule_specific_pairs:
+            raise WorkflowError(
+                "SEARCH_DATABASE_MOLECULE_MISMATCH",
+                f"{candidate.accession}: the declared search program/database molecule is "
+                f"not compatible with a {expected} discovery route.",
+            )
+    coding = expected in {"coding-dna", "coding-rna"}
+    if not coding:
+        if translation_sequences is not None:
+            raise WorkflowError(
+                "INVALID_MOLECULE_PLAN",
+                "A translation FASTA is not valid for a non-coding or protein bundle.",
+            )
+        return
+    if translation_sequences is None:
+        raise WorkflowError(
+            "CDS_TRANSLATION_QC_REQUIRED",
+            "Coding-nucleotide planning requires a translation FASTA.",
+        )
+    candidate_ids = {candidate.accession for candidate in candidates}
+    translation_ids = set(translation_sequences)
+    if candidate_ids != translation_ids:
+        missing = sorted(candidate_ids - translation_ids)
+        extra = sorted(translation_ids - candidate_ids)
+        details: List[str] = []
+        if missing:
+            details.append("missing translations: " + ", ".join(missing))
+        if extra:
+            details.append("translation-only IDs: " + ", ".join(extra))
+        raise WorkflowError(
+            "CODON_ALIGNMENT_ID_MAP_REQUIRED",
+            "CDS and translation FASTA IDs must form an exact one-to-one set ("
+            + "; ".join(details)
+            + ").",
+        )
+    genetic_code = str(molecule["genetic_code"])
+    genetic_code_id = int(genetic_code)
+    for candidate in candidates:
+        accession = candidate.accession
+        if len(candidate.sequence) % 3 != 0:
+            raise WorkflowError(
+                "CDS_FRAME_REQUIRED",
+                f"{accession}: CDS length must be divisible by three before protein-guided alignment.",
+            )
+        required_text = {
+            "genetic_code_id": candidate.genetic_code_id,
+            "reading_frame_source": candidate.reading_frame_source,
+            "strand": candidate.strand,
+            "complete_cds": candidate.complete_cds,
+            "internal_stop_count": candidate.internal_stop_count,
+            "frameshift_count": candidate.frameshift_count,
+            "translation_matches": candidate.translation_matches,
+        }
+        missing_fields = sorted(key for key, value in required_text.items() if not value)
+        if missing_fields:
+            raise WorkflowError(
+                "CDS_TRANSLATION_QC_REQUIRED",
+                f"{accession}: coding candidate metadata is missing: {', '.join(missing_fields)}.",
+            )
+        if candidate.genetic_code_id != genetic_code:
+            raise WorkflowError(
+                "GENETIC_CODE_REQUIRED",
+                f"{accession}: genetic_code_id does not match molecule.genetic_code={genetic_code}.",
+            )
+        if candidate.strand not in {"plus", "minus"}:
+            raise WorkflowError(
+                "CDS_FRAME_REQUIRED", f"{accession}: strand must be plus or minus."
+            )
+        try:
+            internal_stops = int(candidate.internal_stop_count)
+            frameshifts = int(candidate.frameshift_count)
+        except ValueError as exc:
+            raise WorkflowError(
+                "CDS_TRANSLATION_QC_REQUIRED",
+                f"{accession}: internal_stop_count and frameshift_count must be integers.",
+            ) from exc
+        if internal_stops != 0 or frameshifts != 0:
+            raise WorkflowError(
+                "MACSE_ROUTE_REQUIRED",
+                f"{accession}: internal stops or frameshifts require a reviewed MACSE route.",
+            )
+        translated, observed_internal_stops = translate_clean_cds(
+            candidate.sequence, genetic_code_id
+        )
+        if observed_internal_stops != internal_stops:
+            raise WorkflowError(
+                "CDS_TRANSLATION_QC_FAILED",
+                f"{accession}: recorded internal_stop_count does not match deterministic "
+                "code-aware translation.",
+            )
+        if candidate.complete_cds.lower() != "true" or candidate.translation_matches.lower() != "true":
+            raise WorkflowError(
+                "CDS_TRANSLATION_QC_FAILED",
+                f"{accession}: complete_cds and translation_matches must both be true.",
+            )
+        if translated != translation_sequences[accession]:
+            raise WorkflowError(
+                "CDS_TRANSLATION_QC_FAILED",
+                f"{accession}: supplied translation does not equal the CDS translated under "
+                f"NCBI genetic code {genetic_code} (terminal stop excluded; ambiguous codons "
+                "must be represented as X).",
+            )
+        codon_count = len(candidate.sequence) // 3
+        amino_acid_count = len(translation_sequences[accession])
+        if codon_count not in {amino_acid_count, amino_acid_count + 1}:
+            raise WorkflowError(
+                "CDS_TRANSLATION_QC_FAILED",
+                f"{accession}: CDS/translation lengths are incompatible before backtranslation.",
+            )
+
+
+def validate_query_self_provenance(
+    candidates: Sequence[Candidate],
+    config: Mapping[str, Any],
+    query_sequence: str,
+) -> Candidate:
+    """Bind request provenance to the one self row before taxonomy or selection."""
+    query_id = config["query"]["id"]
+    matches = [
+        candidate
+        for candidate in candidates
+        if candidate.accession == query_id or candidate.relation == "self"
+    ]
+    if len(matches) != 1:
+        raise WorkflowError(
+            "QUERY_CANDIDATE_COUNT",
+            "Candidate bundle must contain exactly one self record matching the query ID.",
+        )
+    candidate = matches[0]
+    if candidate.accession != query_id or candidate.relation != "self" or candidate.role != "ingroup":
+        raise WorkflowError(
+            "INVALID_QUERY_CANDIDATE",
+            "The query candidate must match query.id and use relation='self', role='ingroup'.",
+        )
+    if candidate.sequence != query_sequence:
+        raise WorkflowError(
+            "QUERY_SEQUENCE_MISMATCH",
+            "The query self record in the candidate FASTA differs from the query FASTA.",
+        )
+    if config["request_schema_version"] != "0.3":
+        return candidate
+
+    comparisons = {
+        "organism/species": (config["query"]["organism"], candidate.species),
+        "molecule_type": (config["molecule"]["type"], candidate.molecule_type),
+        "source_db": (config["query"]["source_db"], candidate.source_db),
+        "source_release": (config["query"]["source_release"], candidate.source_release),
+        "retrieved_at": (config["query"]["retrieved_at"], candidate.retrieved_at),
+    }
+    if config["query"]["taxon_id"]:
+        comparisons["taxon_id"] = (config["query"]["taxon_id"], candidate.taxon_id)
+    if config["molecule"]["type"] != "protein":
+        comparisons.update(
+            {
+                "strand": (config["query"]["strand"], candidate.strand),
+                "feature_name": (config["query"]["feature_name"], candidate.feature_name),
+                "sequence_region": (
+                    config["query"]["sequence_region"],
+                    candidate.sequence_region,
+                ),
+            }
+        )
+    else:
+        if config["query"]["feature_name"]:
+            comparisons["feature_name"] = (
+                config["query"]["feature_name"],
+                candidate.feature_name,
+            )
+        if config["query"]["sequence_region"]:
+            comparisons["sequence_region"] = (
+                config["query"]["sequence_region"],
+                candidate.sequence_region,
+            )
+    mismatches = [
+        f"{field} (query={left!r}, self={right!r})"
+        for field, (left, right) in comparisons.items()
+        if left != right
+    ]
+    if mismatches:
+        raise WorkflowError(
+            "QUERY_SELF_PROVENANCE_MISMATCH",
+            "Request 0.3 query provenance must exactly match its candidate self row: "
+            + "; ".join(mismatches),
+        )
+    return candidate
 
 
 def optional_mapping(parent: Mapping[str, Any], key: str) -> Mapping[str, Any]:
@@ -628,10 +1343,13 @@ def string_list(parent: Mapping[str, Any], key: str, default: Sequence[str]) -> 
 
 def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
     request_schema = string_at(request, "schema_version")
-    if request_schema not in {"0.1", "0.2"}:
+    if request_schema not in {"0.1", "0.2", "0.3"}:
         raise WorkflowError(
-            "UNSUPPORTED_SCHEMA_VERSION", "Supported request schema versions are '0.1' and '0.2'."
+            "UNSUPPORTED_SCHEMA_VERSION",
+            "Supported request schema versions are '0.1', '0.2', and '0.3'.",
         )
+    if request_schema == "0.3":
+        validate_request_03_shape(request)
     project_id = string_at(request, "project_id")
     objective = string_at(request, "objective")
     if objective not in {"ortholog-tree", "homolog-context", "within-species"}:
@@ -643,23 +1361,163 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
     if sequence_context not in {"cellular", "viral"}:
         raise WorkflowError("INVALID_SEQUENCE_CONTEXT", "sequence_context must be cellular or viral.")
 
+    if request_schema == "0.3":
+        molecule_raw = mapping_at(request, "molecule")
+        molecule_type = string_at(molecule_raw, "type")
+        analysis_kind = string_at(molecule_raw, "analysis_kind")
+        coding_status = string_at(molecule_raw, "coding_status")
+        alignment_strategy = string_at(molecule_raw, "alignment_strategy")
+        trimming_strategy = string_at(molecule_raw, "trimming_strategy")
+        rna_structure_aware = bool_at(molecule_raw, "rna_structure_aware")
+        source_encoding = string_at(molecule_raw, "source_encoding")
+        genetic_code_raw = molecule_raw.get("genetic_code")
+        if genetic_code_raw is not None and (
+            isinstance(genetic_code_raw, bool)
+            or not isinstance(genetic_code_raw, int)
+            or genetic_code_raw not in NCBI_GENETIC_CODES
+        ):
+            raise WorkflowError(
+                "INVALID_MOLECULE_PLAN",
+                "molecule.genetic_code must be null or a currently assigned NCBI genetic-code ID.",
+            )
+        genetic_code = genetic_code_raw
+        allowed_molecule_types = {
+            "protein",
+            "coding-dna",
+            "noncoding-dna",
+            "coding-rna",
+            "noncoding-rna",
+        }
+        if molecule_type not in allowed_molecule_types:
+            raise WorkflowError(
+                "INVALID_MOLECULE_PLAN",
+                "molecule.type must explicitly identify protein, coding/noncoding DNA, or "
+                "coding/noncoding RNA; alphabet-based inference is not allowed.",
+            )
+        if molecule_type == "protein":
+            valid = (
+                analysis_kind == "protein"
+                and coding_status == "not-applicable"
+                and genetic_code is None
+                and alignment_strategy == "mafft-protein"
+                and trimming_strategy in {"none", "trimal-columns"}
+                and not rna_structure_aware
+                and source_encoding == "not-applicable"
+            )
+        elif molecule_type in {"noncoding-dna", "noncoding-rna"}:
+            valid = (
+                analysis_kind == "nucleotide"
+                and coding_status == "not-applicable"
+                and genetic_code is None
+                and alignment_strategy == "mafft-nucleotide"
+                and trimming_strategy in {"none", "trimal-columns"}
+                and (molecule_type == "noncoding-rna" or not rna_structure_aware)
+                and (
+                    (molecule_type == "noncoding-dna" and source_encoding == "not-applicable")
+                    or (
+                        molecule_type == "noncoding-rna"
+                        and source_encoding in {"rna-u", "dna-t"}
+                    )
+                )
+            )
+        else:
+            if coding_status != "clean":
+                raise WorkflowError(
+                    "MACSE_ROUTE_REQUIRED",
+                    "The deterministic planner accepts only complete, translation-validated CDS. "
+                    "Frameshift, internal-stop, pseudogene, or uncertain-frame inputs require a "
+                    "reviewed MACSE route and cannot be silently aligned as ordinary nucleotides.",
+                )
+            if genetic_code not in TRIMAL_BACKTRANS_GENETIC_CODES:
+                raise WorkflowError(
+                    "NONSTANDARD_GENETIC_CODE_ROUTE_REQUIRED",
+                    "The deterministic trimAl backtranslation route supports NCBI genetic codes "
+                    "1 and 11 because trimAl currently checks the universal stop set. Other "
+                    "codes require a reviewed MACSE/PAL2NAL or precomputed codon-alignment route.",
+                )
+            valid = (
+                analysis_kind in {"nucleotide", "codon"}
+                and genetic_code is not None
+                and alignment_strategy == "translate-mafft-backtranslate"
+                and trimming_strategy in {"none", "protein-mask-to-codons"}
+                and not rna_structure_aware
+                and (
+                    (molecule_type == "coding-dna" and source_encoding == "not-applicable")
+                    or (
+                        molecule_type == "coding-rna"
+                        and source_encoding in {"rna-u", "dna-t"}
+                    )
+                )
+            )
+        if not valid:
+            raise WorkflowError(
+                "INVALID_MOLECULE_PLAN",
+                "molecule type, analysis kind, coding status, genetic code, alignment, trimming, "
+                "and RNA-structure settings are incompatible.",
+            )
+        normalized_molecule = {
+            "type": molecule_type,
+            "analysis_kind": analysis_kind,
+            "coding_status": coding_status,
+            "genetic_code": genetic_code,
+            "alignment_strategy": alignment_strategy,
+            "trimming_strategy": trimming_strategy,
+            "rna_structure_aware": rna_structure_aware,
+            "source_encoding": source_encoding,
+        }
+    else:
+        normalized_molecule = {
+            "type": "protein",
+            "analysis_kind": "protein",
+            "coding_status": "not-applicable",
+            "genetic_code": None,
+            "alignment_strategy": "mafft-protein",
+            "trimming_strategy": "trimal-columns",
+            "rna_structure_aware": False,
+            "source_encoding": "not-applicable",
+        }
+
     query = mapping_at(request, "query")
     query_kind = string_at(query, "kind")
-    allowed_query_kinds = {"protein-fasta", "accession", "protein-name", "gene-symbol"}
+    if normalized_molecule["type"] == "protein":
+        allowed_query_kinds = {"protein-fasta", "accession", "protein-name", "gene-symbol"}
+        local_fasta_kind = "protein-fasta"
+    else:
+        allowed_query_kinds = {"nucleotide-fasta", "accession", "sequence-name", "gene-symbol"}
+        local_fasta_kind = "nucleotide-fasta"
     if query_kind not in allowed_query_kinds:
         raise WorkflowError(
             "OFFLINE_QUERY_KIND_UNSUPPORTED",
-            "query.kind must be protein-fasta, accession, protein-name, or gene-symbol; "
-            "all routes must provide a resolved local protein FASTA before planning.",
+            "query.kind is incompatible with the explicitly declared molecule type; every route "
+            "must provide a resolved local FASTA of that same type before planning.",
         )
-    if query_kind != "protein-fasta" and (not query.get("id") or not query.get("path")):
+    if query_kind != local_fasta_kind and (not query.get("id") or not query.get("path")):
         raise WorkflowError(
             "QUERY_RESOLUTION_REQUIRED",
-            "Accession and name routes must be resolved to a local protein FASTA with query.id and query.path.",
+            "Accession and name routes must be resolved to a local molecule-matched FASTA with "
+            "query.id and query.path.",
         )
     query_id = string_at(query, "id")
+    if request_schema == "0.3" and query.get("id") != query_id:
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            "request.query.id must not contain leading or trailing whitespace.",
+        )
     if not SAFE_ID.fullmatch(query_id):
         raise WorkflowError("UNSAFE_SEQUENCE_ID", f"Query ID '{query_id}' contains unsupported characters.")
+    query_original_value = optional_string(query, "original_value", query_id)
+    if request_schema == "0.3" and "original_value" in query:
+        raw_original_value = query.get("original_value")
+        if (
+            not isinstance(raw_original_value, str)
+            or not raw_original_value
+            or raw_original_value != query_original_value
+        ):
+            raise WorkflowError(
+                "REQUEST_SCHEMA_VIOLATION",
+                "request.query.original_value must be a non-empty string without leading or "
+                "trailing whitespace when it is present.",
+            )
     raw_query_organism = query.get("organism")
     if isinstance(raw_query_organism, str) and raw_query_organism != raw_query_organism.strip():
         raise WorkflowError(
@@ -669,12 +1527,56 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
         )
     query_organism = string_at(query, "organism")
     query_taxon_id = optional_string(query, "taxon_id")
+    if (
+        request_schema == "0.3"
+        and "taxon_id" in query
+        and query.get("taxon_id") != query_taxon_id
+    ):
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            "request.query.taxon_id must not contain leading or trailing whitespace.",
+        )
     if query_taxon_id and not ASCII_TAXON_ID.fullmatch(query_taxon_id):
         raise WorkflowError("INVALID_REQUEST", "query.taxon_id must contain only digits when provided.")
-    if query_kind in {"protein-name", "gene-symbol"} and not (query_organism or query_taxon_id):
+    if query_kind in {"protein-name", "sequence-name", "gene-symbol"} and not (
+        query_organism or query_taxon_id
+    ):
         raise WorkflowError(
             "AMBIGUOUS_NAME_WITHOUT_TAXON", "A name or symbol requires a source organism or TaxID."
         )
+    query_strand = optional_string(query, "strand")
+    if request_schema == "0.3":
+        if normalized_molecule["type"] == "protein":
+            if query_strand not in {"", "not-applicable"}:
+                raise WorkflowError(
+                    "INVALID_MOLECULE_PLAN",
+                    "Protein queries must omit query.strand or use 'not-applicable'.",
+                )
+        elif query_strand not in {"plus", "minus"}:
+            raise WorkflowError(
+                "NUCLEOTIDE_STRAND_REQUIRED",
+                "Nucleotide queries require query.strand='plus' or 'minus' and must be "
+                "materialized in the declared analysis orientation.",
+            )
+        if normalized_molecule["type"] != "protein" and (
+            not optional_string(query, "feature_name")
+            or not optional_string(query, "sequence_region")
+        ):
+            raise WorkflowError(
+                "MOLECULE_PROVENANCE_REQUIRED",
+                "Nucleotide queries require query.feature_name and query.sequence_region so "
+                "candidate records can be checked for comparable homologous regions.",
+            )
+        query_source_db = string_at(query, "source_db")
+        query_source_release = string_at(query, "source_release")
+        validate_date_or_utc_timestamp(
+            query.get("retrieved_at"), "request.query.retrieved_at"
+        )
+        query_retrieved_at = string_at(query, "retrieved_at")
+    else:
+        query_source_db = optional_string(query, "source_db")
+        query_source_release = optional_string(query, "source_release")
+        query_retrieved_at = optional_string(query, "retrieved_at")
 
     taxon_scope = mapping_at(request, "taxon_scope")
     privacy = mapping_at(request, "privacy")
@@ -693,6 +1595,24 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
         raise WorkflowError(
             "INCOMPATIBLE_REFERENCE_STRATEGY",
             "ortholog-tree requires references.strategy='ortholog-first' or a curated local-bundle.",
+        )
+    translation_fasta = optional_string(references, "translation_fasta")
+    if request_schema == "0.3" and "translation_fasta" in references and not translation_fasta:
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            "references.translation_fasta must not be empty when it is present.",
+        )
+    coding_molecule = normalized_molecule["type"] in {"coding-dna", "coding-rna"}
+    if coding_molecule and not translation_fasta:
+        raise WorkflowError(
+            "CDS_TRANSLATION_QC_REQUIRED",
+            "A clean coding-nucleotide plan requires references.translation_fasta with one "
+            "translation-validated protein for every CDS ID.",
+        )
+    if not coding_molecule and translation_fasta:
+        raise WorkflowError(
+            "INVALID_MOLECULE_PLAN",
+            "references.translation_fasta is only valid for a coding-nucleotide route.",
         )
 
     normalized_selection = {
@@ -757,6 +1677,13 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
             clustering_raw, "preserve_analysis_groups", ["study", "outgroup"]
         ),
     }
+    if len(normalized_clustering["preserve_analysis_groups"]) != len(
+        set(normalized_clustering["preserve_analysis_groups"])
+    ):
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            "clustering.preserve_analysis_groups must contain unique values.",
+        )
     if normalized_clustering["tool"] != "mmseqs2" or normalized_clustering["algorithm"] not in {
         "easy-linclust",
         "easy-cluster",
@@ -773,10 +1700,33 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
 
     alignment_tool = string_at(alignment, "tool")
     alignment_mode = string_at(alignment, "mode")
-    if alignment_tool != "mafft" or alignment_mode not in {"auto", "linsi", "ginsi", "einsi"}:
+    if alignment_tool != "mafft" or alignment_mode not in {
+        "auto",
+        "linsi",
+        "ginsi",
+        "einsi",
+        "qinsi",
+    }:
         raise WorkflowError(
             "UNSUPPORTED_ALIGNMENT_PLAN",
-            "v0.2 supports MAFFT modes auto, linsi, ginsi, and einsi.",
+            "MAFFT modes auto, linsi, ginsi, einsi, and qinsi are supported.",
+        )
+    if alignment_mode == "qinsi" and not (
+        normalized_molecule["type"] == "noncoding-rna"
+        and normalized_molecule["rna_structure_aware"]
+    ):
+        raise WorkflowError(
+            "UNSUPPORTED_ALIGNMENT_PLAN",
+            "MAFFT Q-INS-i is reserved for an explicitly structure-aware noncoding-RNA route.",
+        )
+    if (
+        normalized_molecule["type"] == "noncoding-rna"
+        and normalized_molecule["rna_structure_aware"]
+        and alignment_mode != "qinsi"
+    ):
+        raise WorkflowError(
+            "STRUCTURE_AWARE_RNA_ALIGNMENT_REQUIRED",
+            "Structure-aware noncoding RNA requires the explicit qinsi alignment mode.",
         )
     normalized_alignment = {
         "tool": alignment_tool,
@@ -799,6 +1749,11 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
     raw_profiles = trimming_raw.get("profiles", [])
     if not isinstance(raw_profiles, list):
         raise WorkflowError("INVALID_TRIMMING_PLAN", "trimming.profiles must be an array.")
+    if request_schema == "0.3" and "profiles" in trimming_raw and not raw_profiles:
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            "trimming.profiles must contain at least one profile when it is present.",
+        )
     trim_profiles: List[Dict[str, Any]] = []
     seen_profiles: set[str] = set()
     for index, raw_profile in enumerate(raw_profiles):
@@ -815,6 +1770,11 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
             raise WorkflowError("INVALID_TRIMMING_PLAN", "gap_threshold must be between 0 and 1.")
         trim_profiles.append({"id": profile_id, "gap_threshold": threshold})
     primary_profile = optional_string(trimming_raw, "primary_profile")
+    if request_schema == "0.3" and "primary_profile" in trimming_raw and not primary_profile:
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            "trimming.primary_profile must not be empty when it is present.",
+        )
     if trimming_enabled and (not trim_profiles or primary_profile not in seen_profiles):
         raise WorkflowError(
             "INVALID_TRIMMING_PLAN",
@@ -831,8 +1791,18 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
         "min_retained_fraction": min_retained_fraction,
         "compare_topologies": optional_bool(trimming_raw, "compare_topologies", True),
     }
+    if request_schema == "0.3" and not trimming_enabled:
+        normalized_trimming["primary_profile"] = ""
+        normalized_trimming["profiles"] = []
     if normalized_trimming["tool"] != "trimal":
         raise WorkflowError("INVALID_TRIMMING_PLAN", "v0.2 supports trimming.tool='trimal'.")
+    if request_schema == "0.3":
+        expected_trimming_enabled = normalized_molecule["trimming_strategy"] != "none"
+        if trimming_enabled != expected_trimming_enabled:
+            raise WorkflowError(
+                "INVALID_TRIMMING_PLAN",
+                "trimming.enabled must agree with molecule.trimming_strategy.",
+            )
 
     if request_schema == "0.1":
         tree_mode = "accurate"
@@ -848,7 +1818,7 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
         support_method = string_at(support, "method")
         support_replicates = optional_int(support, "replicates", 1000, 0)
         sh_alrt = optional_int(support, "sh_alrt", 1000, 0)
-        bnni = optional_bool(support, "bnni", True)
+        bnni = optional_bool(support, "bnni", support_method == "ultrafast")
     if tree_mode not in {"fast", "accurate"}:
         raise WorkflowError("UNSUPPORTED_TREE_PLAN", "tree.mode must be fast or accurate.")
     if tree_mode == "fast":
@@ -871,10 +1841,38 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
             raise WorkflowError(
                 "UNSUPPORTED_TREE_PLAN", "-bnni applies to UFBoot; set support.bnni=false for standard bootstrap."
             )
-    tree_model = optional_string(tree, "model", "WAG" if tree_mode == "fast" else "MFP").upper()
-    if tree_mode == "fast" and tree_model not in {"JTT", "WAG", "LG"}:
+    if normalized_molecule["analysis_kind"] == "protein":
+        default_fast_model = "WAG"
+    else:
+        default_fast_model = "GTR"
+    tree_model = optional_string(
+        tree, "model", default_fast_model if tree_mode == "fast" else "MFP"
+    ).upper()
+    if tree_mode == "fast" and normalized_molecule["analysis_kind"] == "protein" and tree_model not in {
+        "JTT",
+        "WAG",
+        "LG",
+    }:
         raise WorkflowError(
             "UNSUPPORTED_TREE_PLAN", "FastTree protein model must be JTT, WAG, or LG."
+        )
+    if tree_mode == "fast" and normalized_molecule["analysis_kind"] == "nucleotide" and tree_model not in {
+        "JC",
+        "GTR",
+    }:
+        raise WorkflowError(
+            "UNSUPPORTED_TREE_PLAN", "FastTree nucleotide model must be JC or GTR."
+        )
+    if tree_mode == "fast" and normalized_molecule["analysis_kind"] == "codon":
+        raise WorkflowError(
+            "FASTTREE_CODON_MODEL_UNAVAILABLE",
+            "FastTree has no codon substitution model; use an accurate IQ-TREE codon route.",
+        )
+    if tree_mode == "accurate" and request_schema == "0.3" and tree_model != "MFP":
+        raise WorkflowError(
+            "UNSUPPORTED_TREE_PLAN",
+            "Request 0.3 accurate mode requires tree.model='MFP' so IQ-TREE2 ModelFinder "
+            "selects within the explicitly declared AA, DNA, or codon analysis space.",
         )
     if tree_mode == "accurate" and not re.fullmatch(r"[A-Za-z0-9+._,/-]+", tree_model):
         raise WorkflowError("UNSUPPORTED_TREE_PLAN", "tree.model contains unsupported characters.")
@@ -936,6 +1934,39 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
         "source_url": optional_string(taxonomy_raw, "source_url"),
         "retrieved_at": optional_string(taxonomy_raw, "retrieved_at"),
     }
+    if request_schema == "0.3" and "retrieved_at" in taxonomy_raw:
+        validate_date_or_utc_timestamp(
+            taxonomy_raw.get("retrieved_at"), "request.taxonomy.retrieved_at"
+        )
+    if request_schema == "0.3":
+        if "source" in taxonomy_raw and normalized_taxonomy["source"] != "ncbi-taxdump":
+            raise WorkflowError(
+                "REQUEST_SCHEMA_VIOLATION",
+                "taxonomy.source must be 'ncbi-taxdump' whenever it is present.",
+            )
+        if (
+            "match_mode" in taxonomy_raw
+            and normalized_taxonomy["match_mode"] != "exact-scientific-name"
+        ):
+            raise WorkflowError(
+                "REQUEST_SCHEMA_VIOLATION",
+                "taxonomy.match_mode must be 'exact-scientific-name' whenever it is present.",
+            )
+        for key in ("names_dmp", "nodes_dmp", "snapshot", "source_url"):
+            if key in taxonomy_raw and not normalized_taxonomy[key]:
+                raise WorkflowError(
+                    "REQUEST_SCHEMA_VIOLATION",
+                    f"taxonomy.{key} must not be empty when it is present.",
+                )
+        if (
+            "source_url" in taxonomy_raw
+            and NCBI_TAXDUMP_SOURCE_URL.fullmatch(normalized_taxonomy["source_url"])
+            is None
+        ):
+            raise WorkflowError(
+                "REQUEST_SCHEMA_VIOLATION",
+                "taxonomy.source_url must match a supported official NCBI taxdump archive URL.",
+            )
     if taxonomy_enabled:
         if normalized_taxonomy["source"] != "ncbi-taxdump":
             raise WorkflowError(
@@ -983,6 +2014,11 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
             itol_raw, "generate_ranges_after_tree_qc", False
         ),
     }
+    if "dataset_label" in itol_raw and not normalized_itol["dataset_label"]:
+        raise WorkflowError(
+            "REQUEST_SCHEMA_VIOLATION",
+            "itol.dataset_label must not be empty when it is present.",
+        )
     if any(character in normalized_itol["dataset_label"] for character in "\t\r\n"):
         raise WorkflowError("INVALID_ITOL_PLAN", "iTOL dataset_label must be a single TSV-safe line.")
 
@@ -1001,24 +2037,51 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
         ),
     }
 
+    if normalized_molecule["type"] == "protein":
+        default_discovery_tiers = [
+            "curated orthologs",
+            "RefSeq protein",
+            "Swiss-Prot",
+            "UniProtKB/nr",
+            "profile/domain",
+        ]
+    elif coding_molecule:
+        default_discovery_tiers = [
+            "curated orthologs",
+            "RefSeq/GenBank CDS with matched translation",
+            "blastn against a nucleotide database",
+            "reviewed blastx evidence followed by CDS retrieval",
+        ]
+    else:
+        default_discovery_tiers = [
+            "curated homologous loci",
+            "RefSeq RNA/nucleotide",
+            "GenBank/ENA",
+            "blastn against a nucleotide database",
+        ]
+
     return {
-        "schema_version": OUTPUT_SCHEMA_VERSION,
+        "schema_version": OUTPUT_SCHEMA_VERSION if request_schema == "0.3" else "0.3",
         "request_schema_version": request_schema,
         "project_id": project_id,
         "objective": objective,
         "sequence_context": sequence_context,
+        "molecule": normalized_molecule,
         "query": {
             "kind": query_kind,
             "path": string_at(query, "path"),
             "id": query_id,
-            "original_value": optional_string(query, "original_value", query_id),
+            "original_value": query_original_value,
             "organism": query_organism,
             "taxon_id": query_taxon_id,
             "gene_name": optional_string(query, "gene_name"),
             "protein_name": optional_string(query, "protein_name"),
-            "source_db": optional_string(query, "source_db"),
-            "source_release": optional_string(query, "source_release"),
-            "retrieved_at": optional_string(query, "retrieved_at"),
+            "feature_name": optional_string(query, "feature_name"),
+            "strand": query_strand,
+            "sequence_region": optional_string(query, "sequence_region"),
+            "source_db": query_source_db,
+            "source_release": query_source_release,
+            "retrieved_at": query_retrieved_at,
         },
         "taxon_scope": {"ingroup": ingroup_scope, "outgroup": outgroup_scope},
         "privacy": {
@@ -1029,10 +2092,11 @@ def normalize_request(request: Mapping[str, Any]) -> Dict[str, Any]:
             "strategy": strategy,
             "candidate_table": string_at(references, "candidate_table"),
             "candidate_fasta": string_at(references, "candidate_fasta"),
+            "translation_fasta": translation_fasta,
             "discovery_tiers": string_list(
                 references,
                 "discovery_tiers",
-                ["curated orthologs", "RefSeq protein", "Swiss-Prot", "UniProtKB/nr", "profile/domain"],
+                default_discovery_tiers,
             ),
         },
         "selection": normalized_selection,
@@ -1055,6 +2119,21 @@ def allowed_relations(config: Mapping[str, Any]) -> set[str]:
     return allowed
 
 
+def sequence_artifact_names(config: Mapping[str, Any]) -> Dict[str, str]:
+    molecule_type = config["molecule"]["type"]
+    if molecule_type == "protein":
+        return {
+            "reference": "reference_set.faa",
+            "expanded": "expanded_candidates.faa",
+            "raw_alignment": "alignment.raw.faa",
+        }
+    return {
+        "reference": "reference_set.fna",
+        "expanded": "expanded_candidates.fna",
+        "raw_alignment": "alignment.raw.fna",
+    }
+
+
 def clustering_evaluation(
     candidates: Sequence[Candidate], config: Mapping[str, Any]
 ) -> Tuple[Dict[str, Any], List[str]]:
@@ -1075,6 +2154,7 @@ def clustering_evaluation(
         status = "precomputed"
     else:
         status = "pending-upstream"
+    expanded_filename = sequence_artifact_names(config)["expanded"]
     command = {
         "id": "cluster-expanded-candidates",
         "stage": "cluster-candidates",
@@ -1082,7 +2162,7 @@ def clustering_evaluation(
         "argv": [
             "mmseqs",
             policy["algorithm"],
-            "expanded_candidates.faa",
+            expanded_filename,
             "clusters",
             "mmseqs_tmp",
             "--min-seq-id",
@@ -1094,7 +2174,7 @@ def clustering_evaluation(
             "--threads",
             str(policy["threads"]),
         ],
-        "inputs": ["expanded_candidates.faa"],
+        "inputs": [expanded_filename],
         "outputs": ["clusters_cluster.tsv", "clusters_rep_seq.fasta"],
         "status": "planned" if triggered and not complete else "skipped",
         "executed": False,
@@ -1107,6 +2187,7 @@ def clustering_evaluation(
             "cluster_ids_complete": complete,
             "status": status,
             "protected_analysis_groups": ["study", "outgroup"],
+            "sequence_molecule": config["molecule"]["type"],
             "command": command,
             "replan_required_after_execution": triggered and not complete,
         },
@@ -1155,11 +2236,11 @@ def select_candidates(
             current.append("FRAGMENT_FLAG")
         if candidate.query_coverage < policy["min_query_coverage"]:
             current.append("LOW_QUERY_COVERAGE")
-        if (
-            candidate.target_coverage
-            and float(candidate.target_coverage) < policy["min_target_coverage"]
-        ):
-            current.append("LOW_TARGET_COVERAGE")
+        if policy["min_target_coverage"] > 0:
+            if not candidate.target_coverage:
+                current.append("TARGET_COVERAGE_MISSING")
+            elif float(candidate.target_coverage) < policy["min_target_coverage"]:
+                current.append("LOW_TARGET_COVERAGE")
         ratio = candidate.sequence_length / query_length
         if ratio < policy["min_length_ratio"] or ratio > policy["max_length_ratio"]:
             current.append("LENGTH_RATIO_OUT_OF_RANGE")
@@ -1224,7 +2305,12 @@ def select_candidates(
     for candidate in outgroups[wanted_outgroups:]:
         reasons[candidate.accession] = ["OUTGROUP_LIMIT"]
 
-    capacity = max(0, policy["max_references"] - len(chosen_outgroups))
+    capacity = max(
+        0,
+        policy["max_references"]
+        - len(protected_studies)
+        - len(chosen_outgroups),
+    )
     by_clade: Dict[str, List[Candidate]] = {}
     for candidate in ingroups:
         by_clade.setdefault(candidate.clade, []).append(candidate)
@@ -1257,6 +2343,8 @@ def select_candidates(
     ]
 
     blockers: List[str] = []
+    if len(selected) - 1 > policy["max_references"]:
+        blockers.append("REFERENCE_CAP_EXCEEDED_BY_PROTECTED_STUDIES")
     ingroup_taxa = {
         candidate.taxon_id
         for candidate in selected
@@ -1281,7 +2369,7 @@ def select_candidates(
     elif len({candidate.taxon_id for candidate in selected}) < 4:
         blockers.append("INSUFFICIENT_TOTAL_TAXA")
     if (
-        config["request_schema_version"] == "0.2"
+        config["request_schema_version"] in {"0.2", "0.3"}
         and policy["require_outgroup"]
         and any(not candidate.outgroup_rationale for candidate in selected_outgroups)
     ):
@@ -1323,18 +2411,22 @@ def build_fingerprint(
     query_sequence: str,
     candidates: Sequence[Candidate],
     taxonomy_resolution: TaxonomyResolution | None,
+    translation_sequences: Mapping[str, str] | None = None,
 ) -> Dict[str, Any]:
     return {
         "schema_version": config["schema_version"],
         "request_schema_version": config["request_schema_version"],
         "objective": config["objective"],
         "sequence_context": config["sequence_context"],
+        "molecule": config["molecule"],
         "query": {
             "kind": config["query"]["kind"],
             "id": config["query"]["id"],
             "organism": config["query"]["organism"],
             "taxon_id": config["query"]["taxon_id"],
             "source_db": config["query"]["source_db"],
+            "strand": config["query"]["strand"],
+            "sequence_region": config["query"]["sequence_region"],
             "sequence_sha256": sha256_text(query_sequence),
         },
         "taxon_scope": config["taxon_scope"],
@@ -1351,6 +2443,14 @@ def build_fingerprint(
             candidate.fingerprint_record()
             for candidate in sorted(candidates, key=lambda item: item.accession)
         ],
+        "translations": (
+            [
+                {"id": identifier, "sequence_sha256": sha256_text(sequence)}
+                for identifier, sequence in sorted(translation_sequences.items())
+            ]
+            if translation_sequences is not None
+            else []
+        ),
     }
 
 
@@ -1358,36 +2458,163 @@ def build_commands(
     config: Mapping[str, Any], clustering_plan: Mapping[str, Any], *, downstream_blocked: bool
 ) -> List[Dict[str, Any]]:
     alignment = config["alignment"]
+    molecule = config["molecule"]
+    molecule_type = molecule["type"]
+    coding = molecule_type in {"coding-dna", "coding-rna"}
     mafft_modes = {
         "auto": ["--auto"],
         "linsi": ["--localpair", "--maxiterate", "1000"],
         "ginsi": ["--globalpair", "--maxiterate", "1000"],
         "einsi": ["--genafpair", "--maxiterate", "1000"],
+        "qinsi": [],
     }
+    mafft_executable = "mafft-qinsi" if alignment["mode"] == "qinsi" else "mafft"
     mafft_args = [*mafft_modes[alignment["mode"]], "--thread", str(alignment["threads"])]
-    mafft_args.append("reference_set.faa")
+    if molecule_type == "protein":
+        alignment_id = "align-proteins"
+        alignment_input = "reference_set.faa"
+        raw_alignment = "alignment.raw.faa"
+        if config["request_schema_version"] == "0.3":
+            mafft_args.insert(0, "--amino")
+    elif coding:
+        alignment_id = "align-translated-proteins"
+        alignment_input = "reference_set.translated.faa"
+        raw_alignment = "alignment.raw.translated.faa"
+        mafft_args.insert(0, "--amino")
+    else:
+        alignment_id = "align-nucleotides"
+        alignment_input = "reference_set.fna"
+        raw_alignment = "alignment.raw.fna"
+        mafft_args.insert(0, "--nuc")
+    mafft_args.append(alignment_input)
     commands: List[Dict[str, Any]] = []
     downstream_command_status = "blocked" if downstream_blocked else "planned"
     if clustering_plan["command"]["status"] == "planned":
         commands.append(dict(clustering_plan["command"]))
     commands.append(
         {
-            "id": "align-proteins",
+            "id": alignment_id,
             "stage": "align-and-qc",
-            "tool": "mafft",
-            "argv": ["mafft", *mafft_args],
-            "inputs": ["reference_set.faa"],
-            "outputs": ["alignment.raw.faa"],
-            "stdout": "alignment.raw.faa",
+            "tool": mafft_executable,
+            "argv": [mafft_executable, *mafft_args],
+            "inputs": [alignment_input],
+            "outputs": [raw_alignment],
+            "stdout": raw_alignment,
             "status": downstream_command_status,
             "executed": False,
+            "sequence_type": "amino-acid" if molecule_type == "protein" or coding else "nucleotide",
         }
     )
-    tree_input = "alignment.raw.faa"
+    tree_input = raw_alignment
     trimming = config["trimming"]
-    if trimming["enabled"]:
+    if coding:
+        commands.append(
+            {
+                "id": "backtranslate-untrimmed-codons",
+                "stage": "trim-and-qc",
+                "tool": "trimal",
+                "argv": [
+                    "trimal",
+                    "-in",
+                    raw_alignment,
+                    "-backtrans",
+                    "reference_set.fna",
+                    "-ignorestopcodon",
+                    "-out",
+                    "alignment.raw.codon.fna",
+                    "-gt",
+                    "0",
+                    "-fasta",
+                ],
+                "inputs": [raw_alignment, "reference_set.fna"],
+                "outputs": ["alignment.raw.codon.fna"],
+                "stdout": None,
+                "status": downstream_command_status,
+                "executed": False,
+                "transformation": "protein-alignment-mask-to-codon-triplets",
+                "genetic_code": molecule["genetic_code"],
+                "warning_policy": (
+                    "-ignorestopcodon is allowed only after internal-stop=0 and exact "
+                    "translation QC; treat truncation, padding, ID, triplet, or translation "
+                    "warnings as failure."
+                ),
+            }
+        )
+        for profile in trimming["profiles"] if trimming["enabled"] else []:
+            profile_id = profile["id"]
+            threshold = stable_number(profile["gap_threshold"])
+            if trimming["enabled"]:
+                protein_output = f"alignment.trimmed.{profile_id}.faa"
+                commands.append(
+                    {
+                        "id": f"trim-protein-{profile_id}",
+                        "stage": "trim-and-qc",
+                        "tool": "trimal",
+                        "argv": [
+                            "trimal",
+                            "-in",
+                            raw_alignment,
+                            "-out",
+                            protein_output,
+                            "-gt",
+                            threshold,
+                            "-fasta",
+                        ],
+                        "inputs": [raw_alignment],
+                        "outputs": [protein_output],
+                        "stdout": None,
+                        "status": downstream_command_status,
+                        "executed": False,
+                        "threshold_semantics": (
+                            "Retain amino-acid columns first; the same mask is then backtranslated "
+                            "to complete codon triplets."
+                        ),
+                    }
+                )
+            codon_output = (
+                f"alignment.trimmed.{profile_id}.codon.fna"
+            )
+            commands.append(
+                {
+                    "id": f"backtranslate-{profile_id}",
+                    "stage": "trim-and-qc",
+                    "tool": "trimal",
+                    "argv": [
+                        "trimal",
+                        "-in",
+                        raw_alignment,
+                        "-backtrans",
+                        "reference_set.fna",
+                        "-ignorestopcodon",
+                        "-out",
+                        codon_output,
+                        "-gt",
+                        threshold,
+                        "-fasta",
+                    ],
+                    "inputs": [raw_alignment, "reference_set.fna"],
+                    "outputs": [codon_output],
+                    "stdout": None,
+                    "status": downstream_command_status,
+                    "executed": False,
+                    "transformation": "protein-alignment-mask-to-codon-triplets",
+                    "genetic_code": molecule["genetic_code"],
+                    "warning_policy": (
+                        "-ignorestopcodon is allowed only after internal-stop=0 and exact "
+                        "translation QC; treat truncation, padding, ID, triplet, or translation "
+                        "warnings as failure."
+                    ),
+                }
+            )
+        tree_input = (
+            f"alignment.trimmed.{trimming['primary_profile']}.codon.fna"
+            if trimming["enabled"]
+            else "alignment.raw.codon.fna"
+        )
+    elif trimming["enabled"]:
+        extension = "faa" if molecule_type == "protein" else "fna"
         for profile in trimming["profiles"]:
-            output_name = f"alignment.trimmed.{profile['id']}.faa"
+            output_name = f"alignment.trimmed.{profile['id']}.{extension}"
             commands.append(
                 {
                     "id": f"trim-{profile['id']}",
@@ -1396,27 +2623,30 @@ def build_commands(
                     "argv": [
                         "trimal",
                         "-in",
-                        "alignment.raw.faa",
+                        raw_alignment,
                         "-out",
                         output_name,
                         "-gt",
                         stable_number(profile["gap_threshold"]),
                     ],
-                    "inputs": ["alignment.raw.faa"],
+                    "inputs": [raw_alignment],
                     "outputs": [output_name],
                     "stdout": None,
                     "status": downstream_command_status,
                     "executed": False,
                     "threshold_semantics": (
-                        "Retain columns whose fraction of non-gap residues meets the configured threshold."
+                        "Retain columns whose fraction of non-gap symbols meets the configured threshold."
                     ),
                 }
             )
-        tree_input = f"alignment.trimmed.{trimming['primary_profile']}.faa"
+        tree_input = f"alignment.trimmed.{trimming['primary_profile']}.{extension}"
 
     tree = config["tree"]
     if tree["mode"] == "fast":
-        model_args = {"JTT": [], "WAG": ["-wag"], "LG": ["-lg"]}[tree["model"]]
+        if molecule["analysis_kind"] == "protein":
+            model_args = {"JTT": [], "WAG": ["-wag"], "LG": ["-lg"]}[tree["model"]]
+        else:
+            model_args = ["-nt"] + (["-gtr"] if tree["model"] == "GTR" else [])
         commands.append(
             {
                 "id": "infer-fast-tree",
@@ -1432,7 +2662,15 @@ def build_commands(
             }
         )
     else:
-        iqtree_args = ["-s", tree_input, "-m", tree["model"]]
+        iqtree_args = ["-s", tree_input]
+        if molecule["analysis_kind"] == "protein" and config["request_schema_version"] == "0.3":
+            iqtree_args.extend(["-st", "AA"])
+        elif molecule["analysis_kind"] == "nucleotide":
+            iqtree_args.extend(["-st", "DNA"])
+        elif molecule["analysis_kind"] == "codon":
+            genetic_code = molecule["genetic_code"]
+            iqtree_args.extend(["-st", f"CODON{genetic_code}"])
+        iqtree_args.extend(["-m", tree["model"]])
         if tree["support_method"] == "ultrafast":
             iqtree_args.extend(["-B", str(tree["support_replicates"])])
             if tree["bnni"]:
@@ -1479,6 +2717,7 @@ def build_plan(
     blockers: Sequence[str],
     input_hashes: Mapping[str, Mapping[str, str]],
     taxonomy_resolution: TaxonomyResolution | None,
+    translation_sequences: Mapping[str, str] | None = None,
 ) -> Dict[str, Any]:
     all_candidates = list(selected) + [candidate for candidate, _reason_codes in rejected]
     clustering_plan, clustering_blockers = clustering_evaluation(all_candidates, config)
@@ -1508,11 +2747,30 @@ def build_plan(
         "A supported gene-tree topology is not automatically a species tree.",
         "Choose a nearby homologous sister-lineage outgroup; never choose the most distant hit automatically.",
     ]
-    if config["request_schema_version"] == "0.1":
-        warnings.append("Request schema 0.1 was migrated in memory; use schema 0.2 for new projects.")
+    if config["request_schema_version"] in {"0.1", "0.2"}:
+        warnings.append(
+            "Legacy request schema was normalized as an explicit protein workflow; use schema "
+            "0.3 for new protein or nucleotide projects."
+        )
     if config["sequence_context"] == "viral":
         warnings.append(
             "Viral gene trees require explicit checks for recombination, reassortment, segmentation, and mosaic ancestry."
+        )
+    if config["molecule"]["type"] in {"noncoding-rna", "coding-rna"}:
+        if config["molecule"]["source_encoding"] == "rna-u":
+            warnings.append(
+                "RNA U bases are preserved in the source inputs and normalized to T only in "
+                "the derived analysis FASTA; both artifacts and hashes remain auditable."
+            )
+        else:
+            warnings.append(
+                "The RNA source is explicitly T-encoded. Its preserved source FASTA and "
+                "byte-equivalent DNA-alphabet analysis copy remain separately named and hashed."
+            )
+    if config["molecule"]["type"] in {"coding-dna", "coding-rna"}:
+        warnings.append(
+            "Coding-nucleotide alignment is protein-guided; trimAl backtranslation warnings, "
+            "padding, truncation, ID mismatch, or translation mismatch are hard QC failures."
         )
     if any(not candidate.clade for candidate in all_candidates):
         warnings.append("One or more candidates lack clade metadata; taxonomic balancing may be incomplete.")
@@ -1522,7 +2780,9 @@ def build_plan(
         not candidate.target_coverage for candidate in all_candidates
     ):
         warnings.append(
-            "Target coverage is missing for one or more candidates; the target-coverage threshold could not be applied to them."
+            "Target coverage is missing for one or more candidates. Such reference candidates "
+            "are rejected when min_target_coverage is positive; protected study sequences "
+            "remain explicit review conditions."
         )
     study_qc_accessions = sorted(
         candidate.accession
@@ -1532,6 +2792,14 @@ def build_plan(
         and (
             candidate.is_fragment
             or candidate.query_coverage < config["selection"]["min_query_coverage"]
+            or (
+                config["selection"]["min_target_coverage"] > 0
+                and (
+                    not candidate.target_coverage
+                    or float(candidate.target_coverage)
+                    < config["selection"]["min_target_coverage"]
+                )
+            )
             or candidate.sequence_length / len(query_sequence) < config["selection"]["min_length_ratio"]
             or candidate.sequence_length / len(query_sequence) > config["selection"]["max_length_ratio"]
             or candidate.relation not in allowed_relations(config)
@@ -1558,8 +2826,60 @@ def build_plan(
         warnings.append(
             "Candidate ingroup clades with no retained reference: " + ", ".join(unsampled_clades) + "."
         )
+    artifact_names = sequence_artifact_names(config)
+    coding = config["molecule"]["type"] in {"coding-dna", "coding-rna"}
+    if coding:
+        raw_alignment_name = "alignment.raw.translated.faa"
+    else:
+        raw_alignment_name = artifact_names["raw_alignment"]
+    inference_command = next(
+        command
+        for command in commands
+        if command["id"] in {"infer-fast-tree", "infer-accurate-tree"}
+    )
+    tree_input_name = inference_command["inputs"][0]
+    tree_output_name = inference_command["outputs"][0]
+    translation_hashes = (
+        {
+            identifier: sha256_text(sequence)
+            for identifier, sequence in sorted(translation_sequences.items())
+        }
+        if translation_sequences is not None
+        else {}
+    )
+    transformations: List[Dict[str, Any]] = []
+    if config["molecule"]["type"] in {"noncoding-rna", "coding-rna"}:
+        transformations.append(
+            {
+                "operation": (
+                    "normalize-u-to-t-derived-copy"
+                    if config["molecule"]["source_encoding"] == "rna-u"
+                    else "copy-t-encoded-rna-to-analysis-fasta"
+                ),
+                "from": config["molecule"]["type"],
+                "to": config["molecule"]["type"].replace("rna", "dna"),
+                "status": "materialized-by-planner",
+            }
+        )
+    if coding:
+        transformations.extend(
+            [
+                {
+                    "operation": "use-validated-translations",
+                    "from": config["molecule"]["type"],
+                    "to": "protein",
+                    "status": "materialized-input",
+                },
+                {
+                    "operation": "protein-mask-backtranslation",
+                    "from": "protein-alignment",
+                    "to": "codon-alignment",
+                    "status": "planned",
+                },
+            ]
+        )
     plan: Dict[str, Any] = {
-        "schema_version": OUTPUT_SCHEMA_VERSION,
+        "schema_version": config["schema_version"],
         "request_schema_version": config["request_schema_version"],
         "project_id": config["project_id"],
         "run_id": run_id,
@@ -1573,12 +2893,105 @@ def build_plan(
         "mode": "offline-dry-run",
         "objective": config["objective"],
         "sequence_context": config["sequence_context"],
+        "molecule_plan": {
+            **config["molecule"],
+            "source_alphabet": (
+                "amino-acid"
+                if config["molecule"]["type"] == "protein"
+                else (
+                    "RNA-IUPAC"
+                    if config["molecule"]["source_encoding"] == "rna-u"
+                    else "DNA-IUPAC"
+                )
+            ),
+            "analysis_alphabet": (
+                "amino-acid"
+                if config["molecule"]["analysis_kind"] == "protein"
+                else "DNA-IUPAC"
+            ),
+            "reference_fasta": artifact_names["reference"],
+            "translation_fasta": "reference_set.translated.faa" if coding else None,
+            "translation_sequence_sha256": translation_hashes,
+            "transformations": transformations,
+            "no_alphabet_inference": True,
+        },
+        "artifact_plan": {
+            "query_fasta": {
+                "path": input_hashes["query_fasta"]["logical_path"],
+                "artifact_type": "fasta",
+                "data_kind": config["molecule"]["type"],
+            },
+            "reference_fasta": {
+                "path": artifact_names["reference"],
+                "artifact_type": "fasta",
+                "data_kind": (
+                    "protein" if config["molecule"]["type"] == "protein" else "nucleotide"
+                ),
+            },
+            "source_rna_fasta": (
+                {
+                    "path": "reference_set.rna.fasta",
+                    "artifact_type": "fasta",
+                    "data_kind": config["molecule"]["type"],
+                }
+                if config["molecule"]["type"] in {"coding-rna", "noncoding-rna"}
+                else None
+            ),
+            "translation_fasta": (
+                {
+                    "path": "reference_set.translated.faa",
+                    "artifact_type": "fasta",
+                    "data_kind": "protein",
+                }
+                if coding
+                else None
+            ),
+            "raw_alignment": {
+                "path": raw_alignment_name,
+                "artifact_type": "alignment",
+                "data_kind": "protein" if coding else config["molecule"]["analysis_kind"],
+            },
+            "backtranslated_alignment": (
+                {
+                    "path": "alignment.raw.codon.fna",
+                    "artifact_type": "alignment",
+                    "data_kind": "codon",
+                }
+                if coding
+                else None
+            ),
+            "trimmed_alignment": (
+                {
+                    "path": tree_input_name,
+                    "artifact_type": "alignment",
+                    "data_kind": (
+                        "codon" if coding else config["molecule"]["analysis_kind"]
+                    ),
+                }
+                if config["trimming"]["enabled"]
+                else None
+            ),
+            "tree_input": {
+                "path": tree_input_name,
+                "artifact_type": "alignment",
+                "data_kind": "codon" if coding else config["molecule"]["analysis_kind"],
+            },
+            "unrooted_tree": {
+                "path": tree_output_name,
+                "artifact_type": "tree",
+                "inferred_from": config["molecule"]["analysis_kind"],
+            },
+        },
         "query": {
             "id": config["query"]["id"],
             "original_kind": config["query"]["kind"],
             "original_value": config["query"]["original_value"],
             "organism": config["query"]["organism"],
             "taxon_id": config["query"]["taxon_id"],
+            "molecule_type": config["molecule"]["type"],
+            "analysis_kind": config["molecule"]["analysis_kind"],
+            "strand": config["query"]["strand"],
+            "sequence_region": config["query"]["sequence_region"],
             "length": len(query_sequence),
             "sequence_sha256": sha256_text(query_sequence),
         },
@@ -1589,6 +3002,7 @@ def build_plan(
             "retrieved_at": config["query"]["retrieved_at"],
             "gene_name": config["query"]["gene_name"],
             "protein_name": config["query"]["protein_name"],
+            "feature_name": config["query"]["feature_name"],
             "live_lookup_performed_by_planner": False,
         },
         "taxon_scope": config["taxon_scope"],
@@ -1603,16 +3017,31 @@ def build_plan(
         "clustering_plan": clustering_plan,
         "alignment_plan": {
             **config["alignment"],
-            "raw_alignment": "alignment.raw.faa",
+            "strategy": config["molecule"]["alignment_strategy"],
+            "input_molecule": config["molecule"]["type"],
+            "alignment_kind": "protein" if coding else config["molecule"]["analysis_kind"],
+            "raw_alignment": raw_alignment_name,
             "qc_required_before_trimming": True,
         },
         "trimming_plan": {
             **config["trimming"],
+            "strategy": config["molecule"]["trimming_strategy"],
+            "codon_phase_preserved": coding,
             "preserve_raw_alignment": True,
             "approval_required_before_tree": True,
         },
         "tree_plan": {
             **config["tree"],
+            "data_kind": config["molecule"]["analysis_kind"],
+            "iqtree_sequence_type": (
+                "AA"
+                if config["molecule"]["analysis_kind"] == "protein"
+                else (
+                    "DNA"
+                    if config["molecule"]["analysis_kind"] == "nucleotide"
+                    else f"CODON{config['molecule']['genetic_code']}"
+                )
+            ),
             "tree_claim": "gene-tree",
             "support_is_repeatability_not_correctness": True,
             "preserve_unrooted": True,
@@ -1702,7 +3131,11 @@ def build_plan(
         ],
         "stages": [
             {"id": "intake", "status": "completed"},
-            {"id": "resolve-query", "status": "completed", "method": "local protein FASTA"},
+            {
+                "id": "resolve-query",
+                "status": "completed",
+                "method": f"local {config['molecule']['type']} FASTA",
+            },
             {
                 "id": "discover-candidates",
                 "status": "completed",
@@ -1765,19 +3198,64 @@ def wrap_sequence(sequence: str, width: int = 80) -> str:
 
 def reference_fasta_text(
     selected: Sequence[Candidate],
+    *,
+    sequences: Mapping[str, str] | None = None,
+    normalize_rna: bool = False,
 ) -> str:
     parts: List[str] = []
     for candidate in selected:
-        parts.append(f">{candidate.accession}\n{wrap_sequence(candidate.sequence)}")
+        sequence = (
+            sequences[candidate.accession]
+            if sequences is not None
+            else candidate.sequence
+        )
+        if normalize_rna:
+            sequence = sequence.replace("U", "T")
+        parts.append(f">{candidate.accession}\n{wrap_sequence(sequence)}")
     return "\n".join(parts) + "\n"
 
 
 def sequence_metadata_rows(
-    selected: Sequence[Candidate], rejected: Sequence[Tuple[Candidate, Sequence[str]]]
+    selected: Sequence[Candidate],
+    rejected: Sequence[Tuple[Candidate, Sequence[str]]],
+    config: Mapping[str, Any],
+    translation_sequences: Mapping[str, str] | None,
 ) -> List[Dict[str, str]]:
+    molecule = config["molecule"]
+    rna_u_source = (
+        molecule["type"] in {"coding-rna", "noncoding-rna"}
+        and molecule["source_encoding"] == "rna-u"
+    )
+    coding = molecule["type"] in {"coding-dna", "coding-rna"}
+
+    def annotate(row: Dict[str, str], candidate: Candidate) -> None:
+        analysis_sequence = (
+            candidate.sequence.replace("U", "T") if rna_u_source else candidate.sequence
+        )
+        translation_sequence = (
+            translation_sequences.get(candidate.accession, "")
+            if translation_sequences is not None
+            else ""
+        )
+        row.update(
+            {
+                "analysis_kind": molecule["analysis_kind"],
+                "source_encoding": molecule["source_encoding"],
+                "source_sequence_sha256": candidate.sequence_sha256,
+                "analysis_sequence_sha256": sha256_text(analysis_sequence),
+                "translation_sequence_sha256": (
+                    sha256_text(translation_sequence) if translation_sequence else ""
+                ),
+                "backtranslation_qc_status": (
+                    "pending-execution" if coding else "not-applicable"
+                ),
+            }
+        )
+
     rows: List[Dict[str, str]] = []
     for index, candidate in enumerate(selected, start=1):
         row = candidate.output_row()
+        annotate(row, candidate)
         row.update(
             {
                 "tip_id": candidate.accession,
@@ -1790,6 +3268,7 @@ def sequence_metadata_rows(
         rows.append(row)
     for candidate, reason_codes in sorted(rejected, key=lambda item: item[0].accession):
         row = candidate.output_row()
+        annotate(row, candidate)
         row.update(
             {
                 "tip_id": candidate.accession,
@@ -1847,6 +3326,8 @@ def write_bundle(
     taxonomy_resolution: TaxonomyResolution | None = None,
     taxonomy_names_path: Path | None = None,
     taxonomy_nodes_path: Path | None = None,
+    translation_fasta_path: Path | None = None,
+    translation_sequences: Mapping[str, str] | None = None,
 ) -> None:
     if output_path.exists():
         raise WorkflowError("OUTPUT_EXISTS", f"Refusing to overwrite existing output path: {output_path}")
@@ -1887,21 +3368,41 @@ def write_bundle(
             BASE_OUTPUT_COLUMNS + ("reason_codes",),
             rejected_rows,
         )
-        (temp_path / "reference_set.faa").write_text(
-            reference_fasta_text(selected),
-            encoding="utf-8",
+        artifact_names = sequence_artifact_names(config)
+        molecule_type = config["molecule"]["type"]
+        rna_input = molecule_type in {"coding-rna", "noncoding-rna"}
+        normalize_rna_u = bool(
+            rna_input and config["molecule"]["source_encoding"] == "rna-u"
         )
+        (temp_path / artifact_names["reference"]).write_text(
+            reference_fasta_text(selected, normalize_rna=normalize_rna_u), encoding="utf-8"
+        )
+        if rna_input:
+            (temp_path / "reference_set.rna.fasta").write_text(
+                reference_fasta_text(selected), encoding="utf-8"
+            )
+        if translation_sequences is not None:
+            (temp_path / "reference_set.translated.faa").write_text(
+                reference_fasta_text(selected, sequences=translation_sequences),
+                encoding="utf-8",
+            )
         metadata_columns = (
             "tip_id",
             "analysis_role",
             "inclusion_status",
             "selection_order",
             "reason_codes",
+            "analysis_kind",
+            "source_encoding",
+            "source_sequence_sha256",
+            "analysis_sequence_sha256",
+            "translation_sequence_sha256",
+            "backtranslation_qc_status",
         ) + BASE_OUTPUT_COLUMNS
         write_tsv(
             temp_path / "sequence_metadata.tsv",
             metadata_columns,
-            sequence_metadata_rows(selected, rejected),
+            sequence_metadata_rows(selected, rejected, config, translation_sequences),
         )
         if config["itol"]["enabled"]:
             (temp_path / "itol_roles.txt").write_text(
@@ -1927,6 +3428,11 @@ def write_bundle(
                 "sha256": file_sha256(candidate_table_path),
             },
         }
+        if translation_fasta_path is not None:
+            input_hashes["translation_fasta"] = {
+                "logical_path": f"inputs/{translation_fasta_path.name}",
+                "sha256": file_sha256(translation_fasta_path),
+            }
         if taxonomy_resolution is not None:
             if taxonomy_names_path is None or taxonomy_nodes_path is None:
                 raise WorkflowError(
@@ -1950,6 +3456,7 @@ def write_bundle(
             blockers,
             input_hashes,
             taxonomy_resolution,
+            translation_sequences,
         )
         if plan["clustering_plan"]["command"]["status"] == "planned":
             expanded = [
@@ -1957,8 +3464,11 @@ def write_bundle(
                 for candidate in list(selected) + [item[0] for item in rejected]
                 if candidate.analysis_role == "expanded"
             ]
-            (temp_path / "expanded_candidates.faa").write_text(
-                reference_fasta_text(sorted(expanded, key=lambda item: item.accession)),
+            (temp_path / artifact_names["expanded"]).write_text(
+                reference_fasta_text(
+                    sorted(expanded, key=lambda item: item.accession),
+                    normalize_rna=normalize_rna_u,
+                ),
                 encoding="utf-8",
             )
         write_json(temp_path / "plan.json", plan)
@@ -1966,24 +3476,32 @@ def write_bundle(
         output_names: Tuple[str, ...] = (
             "selected_references.tsv",
             "rejected_references.tsv",
-            "reference_set.faa",
+            artifact_names["reference"],
             "sequence_metadata.tsv",
             "plan.json",
         )
+        if rna_input:
+            output_names += ("reference_set.rna.fasta",)
+        if translation_sequences is not None:
+            output_names += ("reference_set.translated.faa",)
         if config["itol"]["enabled"]:
             output_names += ("itol_roles.txt",)
         if taxonomy_resolution is not None:
             output_names += ("taxonomy_resolution.tsv",)
-        if (temp_path / "expanded_candidates.faa").is_file():
-            output_names += ("expanded_candidates.faa",)
+        if (temp_path / artifact_names["expanded"]).is_file():
+            output_names += (artifact_names["expanded"],)
         media_types = {
             "selected_references.tsv": "text/tab-separated-values",
             "rejected_references.tsv": "text/tab-separated-values",
             "reference_set.faa": "text/x-fasta",
+            "reference_set.fna": "text/x-fasta",
+            "reference_set.rna.fasta": "text/x-fasta",
+            "reference_set.translated.faa": "text/x-fasta",
             "sequence_metadata.tsv": "text/tab-separated-values",
             "itol_roles.txt": "text/plain",
             "taxonomy_resolution.tsv": "text/tab-separated-values",
             "expanded_candidates.faa": "text/x-fasta",
+            "expanded_candidates.fna": "text/x-fasta",
             "plan.json": "application/json",
         }
         request_digest = input_hashes["request"]["sha256"]
@@ -2023,6 +3541,14 @@ def write_bundle(
                 input_hashes["candidate_table"]["sha256"],
             ),
         ]
+        if translation_fasta_path is not None:
+            manifest_inputs.append(
+                logical_input(
+                    "translation_fasta",
+                    translation_fasta_path.name,
+                    input_hashes["translation_fasta"]["sha256"],
+                )
+            )
         if taxonomy_resolution is not None:
             manifest_inputs.extend(
                 [
@@ -2031,7 +3557,7 @@ def write_bundle(
                 ]
             )
         manifest: Dict[str, Any] = {
-            "schema_version": OUTPUT_SCHEMA_VERSION,
+            "schema_version": config["schema_version"],
             "workflow_version": VERSION,
             "run_id": run_id,
             "workflow_state": plan["state"],
@@ -2048,6 +3574,10 @@ def write_bundle(
                 "id": config["query"]["id"],
                 "organism": config["query"]["organism"],
                 "taxon_id": config["query"]["taxon_id"],
+                "molecule_type": config["molecule"]["type"],
+                "analysis_kind": config["molecule"]["analysis_kind"],
+                "strand": config["query"]["strand"],
+                "sequence_region": config["query"]["sequence_region"],
                 "length": len(query_sequence),
                 "sequence_sha256": sha256_text(query_sequence),
             },
@@ -2055,6 +3585,7 @@ def write_bundle(
             "policy": {
                 "objective": config["objective"],
                 "sequence_context": config["sequence_context"],
+                "molecule": config["molecule"],
                 "reference_strategy": config["references"]["strategy"],
                 "taxon_scope": config["taxon_scope"],
                 "selection": config["selection"],
@@ -2079,6 +3610,7 @@ def write_bundle(
             "tool_versions": {
                 "mmseqs2": {"status": "not-inspected", "version": None},
                 "mafft": {"status": "not-inspected", "version": None},
+                "mafft-qinsi": {"status": "not-inspected", "version": None},
                 "trimal": {"status": "not-inspected", "version": None},
                 "fasttree": {"status": "not-inspected", "version": None},
                 "iqtree2": {"status": "not-inspected", "version": None},
@@ -2131,9 +3663,18 @@ def run_plan(args: argparse.Namespace) -> int:
         request_path, config["references"]["candidate_table"], "Candidate table"
     )
 
-    query_records = parse_fasta(query_path, "query")
+    molecule_type = config["molecule"]["type"]
+    query_records = parse_fasta(
+        query_path,
+        "query",
+        molecule_type=molecule_type,
+        source_encoding=config["molecule"]["source_encoding"],
+    )
     if len(query_records) != 1:
-        raise WorkflowError("QUERY_RECORD_COUNT", "Query FASTA must contain exactly one protein record.")
+        raise WorkflowError(
+            "QUERY_RECORD_COUNT",
+            "Query FASTA must contain exactly one record of the declared molecule type.",
+        )
     query_id, _query_header, query_sequence = query_records[0]
     if query_id != config["query"]["id"]:
         raise WorkflowError(
@@ -2141,9 +3682,33 @@ def run_plan(args: argparse.Namespace) -> int:
             f"Configured query ID '{config['query']['id']}' does not match FASTA ID '{query_id}'.",
         )
 
-    candidate_records = parse_fasta(candidate_fasta_path, "candidate")
+    candidate_records = parse_fasta(
+        candidate_fasta_path,
+        "candidate",
+        molecule_type=molecule_type,
+        source_encoding=config["molecule"]["source_encoding"],
+    )
     candidate_sequences = {identifier: sequence for identifier, _header, sequence in candidate_records}
     candidates = parse_candidate_table(candidate_table_path, candidate_sequences)
+    translation_fasta_path: Path | None = None
+    translation_sequences: Dict[str, str] | None = None
+    if config["references"]["translation_fasta"]:
+        translation_fasta_path = resolve_input_path(
+            request_path,
+            config["references"]["translation_fasta"],
+            "Candidate translation FASTA",
+        )
+        translation_records = parse_fasta(
+            translation_fasta_path,
+            "candidate translation",
+            molecule_type="protein",
+            source_encoding="not-applicable",
+        )
+        translation_sequences = {
+            identifier: sequence for identifier, _header, sequence in translation_records
+        }
+    validate_molecule_bundle(candidates, config, translation_sequences)
+    validate_query_self_provenance(candidates, config, query_sequence)
     taxonomy_resolution: TaxonomyResolution | None = None
     taxonomy_names_path: Path | None = None
     taxonomy_nodes_path: Path | None = None
@@ -2154,36 +3719,6 @@ def run_plan(args: argparse.Namespace) -> int:
         taxonomy_nodes_path = resolve_input_path(
             request_path, config["taxonomy"]["nodes_dmp"], "NCBI nodes.dmp"
         )
-        query_self = [
-            candidate
-            for candidate in candidates
-            if candidate.accession == config["query"]["id"] or candidate.relation == "self"
-        ]
-        if len(query_self) != 1:
-            raise WorkflowError(
-                "QUERY_CANDIDATE_COUNT",
-                "Candidate bundle must contain exactly one self record matching the query ID.",
-            )
-        if (
-            query_self[0].accession != config["query"]["id"]
-            or query_self[0].relation != "self"
-        ):
-            raise WorkflowError(
-                "INVALID_QUERY_CANDIDATE",
-                "The query candidate must use the query accession and relation='self'.",
-            )
-        if query_self[0].species != config["query"]["organism"]:
-            raise WorkflowError(
-                "QUERY_TAXONOMY_MISMATCH",
-                "query.organism must exactly equal the query self-record species before "
-                "NCBI Taxonomy validation.",
-            )
-        if config["query"]["taxon_id"] and query_self[0].taxon_id != config["query"]["taxon_id"]:
-            raise WorkflowError(
-                "QUERY_TAXONOMY_MISMATCH",
-                "query.taxon_id must equal the query self-record TaxID before NCBI Taxonomy "
-                "validation.",
-            )
         try:
             taxonomy_resolution = resolve_exact_scientific_names(
                 [
@@ -2212,7 +3747,13 @@ def run_plan(args: argparse.Namespace) -> int:
     selected, rejected, blockers = select_candidates(candidates, query_id, query_sequence, config)
     _clustering_plan, clustering_blockers = clustering_evaluation(candidates, config)
     all_blockers = list(dict.fromkeys([*blockers, *clustering_blockers]))
-    fingerprint = build_fingerprint(config, query_sequence, candidates, taxonomy_resolution)
+    fingerprint = build_fingerprint(
+        config,
+        query_sequence,
+        candidates,
+        taxonomy_resolution,
+        translation_sequences,
+    )
     run_id = "gtr-" + sha256_text(canonical_json(fingerprint))[:16]
     write_bundle(
         output_path,
@@ -2229,6 +3770,8 @@ def run_plan(args: argparse.Namespace) -> int:
         taxonomy_resolution,
         taxonomy_names_path,
         taxonomy_nodes_path,
+        translation_fasta_path,
+        translation_sequences,
     )
 
     status = (
@@ -2253,6 +3796,11 @@ def run_plan(args: argparse.Namespace) -> int:
 LOCAL_TOOL_PROBES: Mapping[str, Sequence[str]] = {
     "ncbi-datasets": ("datasets", "version"),
     "blastp": ("blastp", "-version"),
+    "blastn": ("blastn", "-version"),
+    "blastx": ("blastx", "-version"),
+    "tblastn": ("tblastn", "-version"),
+    "tblastx": ("tblastx", "-version"),
+    "mafft-qinsi": ("mafft-qinsi", "--version"),
     "interproscan": ("interproscan.sh", "--version"),
     "jackhmmer": ("jackhmmer", "-h"),
     "hhsearch": ("hhsearch", "-h"),
@@ -2260,6 +3808,8 @@ LOCAL_TOOL_PROBES: Mapping[str, Sequence[str]] = {
     "mmseqs2": ("mmseqs", "version"),
     "mafft": ("mafft", "--version"),
     "trimal": ("trimal", "--version"),
+    "pal2nal": ("pal2nal.pl", "-h"),
+    "macse": ("macse", "-h"),
     "fasttree": ("FastTree", "-help"),
     "iqtree2": ("iqtree2", "--version"),
     "iqtree3": ("iqtree3", "--version"),
@@ -2287,13 +3837,20 @@ SAFE_STORED_VERSION_PATTERN = re.compile(
 PROBE_SIGNATURES: Mapping[str, str] = {
     "ncbi-datasets": r"datasets|ncbi",
     "blastp": r"blastp",
+    "blastn": r"blastn",
+    "blastx": r"blastx",
+    "tblastn": r"tblastn",
+    "tblastx": r"tblastx",
     "interproscan": r"interproscan",
     "jackhmmer": r"jackhmmer|hmmer",
     "hhsearch": r"hhsearch|hh-suite|hhsuite",
     "foldseek": r"foldseek",
     "mmseqs2": r"mmseqs",
     "mafft": r"mafft",
+    "mafft-qinsi": r"mafft",
     "trimal": r"trimal",
+    "pal2nal": r"pal2nal",
+    "macse": r"macse",
     "fasttree": r"fasttree",
     "iqtree2": r"iq-tree|iqtree",
     "iqtree3": r"iq-tree|iqtree",
@@ -2346,11 +3903,17 @@ def probe_command(
         signature_matches = bool(
             signature and re.search(signature, rendered, flags=re.IGNORECASE)
         )
-        if completed.returncode not in allowed_return_codes or not signature_matches:
+        version = safe_version_token(rendered)
+        # MAFFT and its dedicated Q-INS-i wrapper commonly emit only a token such
+        # as "v7.526 (2024/Apr/22)" for --version, without the product name.
+        version_only_signature = bool(
+            name in {"mafft", "mafft-qinsi"} and version is not None
+        )
+        if completed.returncode not in allowed_return_codes or not (
+            signature_matches or version_only_signature
+        ):
             status = "probe-failed"
             version = None
-        else:
-            version = safe_version_token(rendered)
     except (OSError, subprocess.SubprocessError):
         status = "probe-failed"
         version = None
@@ -2551,6 +4114,8 @@ def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
         if not isinstance(child, str) or not child.strip():
             fail(f"{label}.{key} must be a non-empty string.")
         normalized = child.strip()
+        if source_profile_version == ENVIRONMENT_PROFILE_SCHEMA_VERSION and child != normalized:
+            fail(f"{label}.{key} must not contain leading or trailing whitespace.")
         if choices is not None and normalized not in choices:
             fail(f"{label}.{key} must be one of: {', '.join(sorted(choices))}.")
         return normalized
@@ -2575,8 +4140,12 @@ def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
         },
         "profile",
     )
-    if raw.get("schema_version") != ENVIRONMENT_PROFILE_SCHEMA_VERSION:
-        fail(f"schema_version must be '{ENVIRONMENT_PROFILE_SCHEMA_VERSION}'.")
+    source_profile_version = raw.get("schema_version")
+    if source_profile_version not in {"0.1", ENVIRONMENT_PROFILE_SCHEMA_VERSION}:
+        fail(
+            "schema_version must be legacy '0.1' or current "
+            f"'{ENVIRONMENT_PROFILE_SCHEMA_VERSION}'."
+        )
     profile_id = text_at(raw, "profile_id", "profile")
     if not SAFE_PROFILE_ID.fullmatch(profile_id):
         fail("profile.profile_id contains unsupported characters.")
@@ -2604,10 +4173,18 @@ def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
             "taxdump_location",
             "sequence_database_location",
             "sequence_database_format",
+            "query_molecule",
+            "candidates_molecule",
+            "candidate_bundle_kind",
+            "alignment_kind",
+            "tree_data_kind",
+            "sequence_database_molecule",
             "cached_literature",
         },
         "inputs",
     )
+    if "candidate_count" not in inputs:
+        fail("inputs.candidate_count is required (use null when it is unknown).")
     candidate_count = inputs.get("candidate_count")
     if candidate_count is not None and (
         isinstance(candidate_count, bool)
@@ -2616,6 +4193,24 @@ def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
     ):
         fail("inputs.candidate_count must be null or an integer >= 0.")
     location_choices = {"absent", "host", "compute-target", "both"}
+    molecule_input_keys = {
+        "query_molecule",
+        "candidates_molecule",
+        "candidate_bundle_kind",
+        "alignment_kind",
+        "tree_data_kind",
+        "sequence_database_molecule",
+    }
+    if source_profile_version == "0.1" and molecule_input_keys.intersection(inputs):
+        fail("Profile 0.1 cannot contain molecule fields; use schema_version '0.2'.")
+    if source_profile_version == "0.2":
+        missing_molecule_inputs = sorted(molecule_input_keys - set(inputs))
+        if missing_molecule_inputs:
+            fail(
+                "Profile 0.2 requires molecule fields: "
+                + ", ".join(missing_molecule_inputs)
+            )
+
     normalized_inputs = {
         "query_kind": text_at(
             inputs,
@@ -2660,6 +4255,102 @@ def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
         ),
         "cached_literature": flag_at(inputs, "cached_literature", "inputs"),
     }
+    if source_profile_version == "0.1":
+        normalized_inputs.update(
+            {
+                "query_molecule": "protein",
+                "candidates_molecule": (
+                    "absent"
+                    if normalized_inputs["candidates_location"] == "absent"
+                    else "protein"
+                ),
+                "candidate_bundle_kind": (
+                    "absent"
+                    if normalized_inputs["candidates_location"] == "absent"
+                    else "protein-fasta-metadata"
+                ),
+                "alignment_kind": (
+                    "absent"
+                    if normalized_inputs["alignment_location"] == "absent"
+                    else "protein"
+                ),
+                "tree_data_kind": (
+                    "absent"
+                    if normalized_inputs["tree_location"] == "absent"
+                    else "protein"
+                ),
+                "sequence_database_molecule": (
+                    "none"
+                    if normalized_inputs["sequence_database_location"] == "absent"
+                    else "protein"
+                ),
+            }
+        )
+    else:
+        normalized_inputs.update(
+            {
+                "query_molecule": text_at(
+                    inputs,
+                    "query_molecule",
+                    "inputs",
+                    {
+                        "protein",
+                        "coding-dna",
+                        "coding-rna",
+                        "noncoding-dna",
+                        "noncoding-rna",
+                        "nucleotide-ambiguous",
+                        "unknown",
+                    },
+                ),
+                "candidates_molecule": text_at(
+                    inputs,
+                    "candidates_molecule",
+                    "inputs",
+                    {
+                        "absent",
+                        "protein",
+                        "coding-dna",
+                        "coding-rna",
+                        "noncoding-dna",
+                        "noncoding-rna",
+                        "mixed",
+                        "unknown",
+                    },
+                ),
+                "candidate_bundle_kind": text_at(
+                    inputs,
+                    "candidate_bundle_kind",
+                    "inputs",
+                    {
+                        "absent",
+                        "protein-fasta-metadata",
+                        "noncoding-nucleotide-fasta-metadata",
+                        "clean-cds-translations-metadata",
+                        "disrupted-cds-metadata",
+                        "unknown",
+                    },
+                ),
+                "alignment_kind": text_at(
+                    inputs,
+                    "alignment_kind",
+                    "inputs",
+                    {"absent", "protein", "nucleotide", "codon", "unknown"},
+                ),
+                "tree_data_kind": text_at(
+                    inputs,
+                    "tree_data_kind",
+                    "inputs",
+                    {"absent", "protein", "nucleotide", "codon", "unknown"},
+                ),
+                "sequence_database_molecule": text_at(
+                    inputs,
+                    "sequence_database_molecule",
+                    "inputs",
+                    {"none", "protein", "nucleotide", "mixed", "unknown"},
+                ),
+            }
+        )
     if normalized_inputs["query_resolved"] and normalized_inputs["query_location"] == "absent":
         fail("inputs.query_resolved=true requires a non-absent query_location.")
     if (normalized_inputs["tree_location"] == "absent") != (
@@ -2671,6 +4362,31 @@ def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
     ):
         fail(
             "sequence_database_location must be absent exactly when sequence_database_format is none."
+        )
+    if (normalized_inputs["candidates_location"] == "absent") != (
+        normalized_inputs["candidates_molecule"] == "absent"
+    ):
+        fail("candidates_location must be absent exactly when candidates_molecule is absent.")
+    if (normalized_inputs["candidates_location"] == "absent") != (
+        normalized_inputs["candidate_bundle_kind"] == "absent"
+    ):
+        fail(
+            "candidates_location must be absent exactly when candidate_bundle_kind is absent."
+        )
+    if (normalized_inputs["alignment_location"] == "absent") != (
+        normalized_inputs["alignment_kind"] == "absent"
+    ):
+        fail("alignment_location must be absent exactly when alignment_kind is absent.")
+    if (normalized_inputs["tree_location"] == "absent") != (
+        normalized_inputs["tree_data_kind"] == "absent"
+    ):
+        fail("tree_location must be absent exactly when tree_data_kind is absent.")
+    if (normalized_inputs["sequence_database_location"] == "absent") != (
+        normalized_inputs["sequence_database_molecule"] == "none"
+    ):
+        fail(
+            "sequence_database_location must be absent exactly when "
+            "sequence_database_molecule is none."
         )
 
     capabilities = object_at(raw, "capabilities", "profile")
@@ -2706,6 +4422,8 @@ def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
     threads = compute.get("threads")
     if isinstance(threads, bool) or not isinstance(threads, int) or threads < 1:
         fail("compute.threads must be an integer >= 1.")
+    if "memory_gb" not in compute:
+        fail("compute.memory_gb is required (use null when it is unknown).")
     memory_gb = compute.get("memory_gb")
     if memory_gb is not None and (
         isinstance(memory_gb, bool)
@@ -2736,6 +4454,12 @@ def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
         "current_literature",
         "report",
         "clustering_trigger",
+        "analysis_kind",
+        "genetic_code",
+        "coding_status",
+        "alignment_strategy",
+        "trimming_strategy",
+        "rna_structure_aware",
     }
     exact_keys(requirements, requirement_keys, "requirements")
     clustering_trigger = requirements.get("clustering_trigger")
@@ -2745,6 +4469,26 @@ def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
         or clustering_trigger < 1
     ):
         fail("requirements.clustering_trigger must be an integer >= 1.")
+    molecule_requirement_keys = {
+        "analysis_kind",
+        "genetic_code",
+        "coding_status",
+        "alignment_strategy",
+        "trimming_strategy",
+        "rna_structure_aware",
+    }
+    if source_profile_version == "0.1" and molecule_requirement_keys.intersection(requirements):
+        fail("Profile 0.1 cannot contain molecule requirements; use schema_version '0.2'.")
+    if source_profile_version == "0.2":
+        missing_molecule_requirements = sorted(
+            molecule_requirement_keys - set(requirements)
+        )
+        if missing_molecule_requirements:
+            fail(
+                "Profile 0.2 requires molecule requirements: "
+                + ", ".join(missing_molecule_requirements)
+            )
+
     normalized_requirements = {
         "trimming": flag_at(requirements, "trimming", "requirements"),
         "exact_taxonomy": flag_at(requirements, "exact_taxonomy", "requirements"),
@@ -2761,8 +4505,203 @@ def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
         "report": flag_at(requirements, "report", "requirements"),
         "clustering_trigger": clustering_trigger,
     }
+    if source_profile_version == "0.1":
+        normalized_requirements.update(
+            {
+                "analysis_kind": "protein",
+                "genetic_code": None,
+                "coding_status": "not-applicable",
+                "alignment_strategy": "mafft-protein",
+                "trimming_strategy": (
+                    "trimal-columns" if normalized_requirements["trimming"] else "none"
+                ),
+                "rna_structure_aware": False,
+            }
+        )
+    else:
+        genetic_code = requirements.get("genetic_code")
+        if genetic_code is not None and (
+            isinstance(genetic_code, bool)
+            or not isinstance(genetic_code, int)
+            or genetic_code not in NCBI_GENETIC_CODES
+        ):
+            fail(
+                "requirements.genetic_code must be null or a currently assigned NCBI "
+                "genetic-code ID."
+            )
+        normalized_requirements.update(
+            {
+                "analysis_kind": text_at(
+                    requirements,
+                    "analysis_kind",
+                    "requirements",
+                    {"protein", "nucleotide", "codon", "auto"},
+                ),
+                "genetic_code": genetic_code,
+                "coding_status": text_at(
+                    requirements,
+                    "coding_status",
+                    "requirements",
+                    {"not-applicable", "clean", "disrupted", "unknown"},
+                ),
+                "alignment_strategy": text_at(
+                    requirements,
+                    "alignment_strategy",
+                    "requirements",
+                    {
+                        "auto",
+                        "mafft-protein",
+                        "mafft-nucleotide",
+                        "translate-mafft-backtranslate",
+                        "macse",
+                        "precomputed",
+                    },
+                ),
+                "trimming_strategy": text_at(
+                    requirements,
+                    "trimming_strategy",
+                    "requirements",
+                    {"none", "trimal-columns", "protein-mask-to-codons", "precomputed"},
+                ),
+                "rna_structure_aware": flag_at(
+                    requirements, "rna_structure_aware", "requirements"
+                ),
+            }
+        )
+    query_molecule = normalized_inputs["query_molecule"]
+    analysis_kind = normalized_requirements["analysis_kind"]
+    if query_molecule == "protein":
+        valid_molecule_requirements = (
+            analysis_kind in {"protein", "auto"}
+            and normalized_requirements["genetic_code"] is None
+            and normalized_requirements["coding_status"] == "not-applicable"
+            and normalized_requirements["alignment_strategy"]
+            in {"auto", "mafft-protein", "precomputed"}
+            and normalized_requirements["trimming_strategy"]
+            in {"none", "trimal-columns", "precomputed"}
+            and not normalized_requirements["rna_structure_aware"]
+        )
+        resolved_analysis_kind = "protein"
+    elif query_molecule in {"noncoding-dna", "noncoding-rna"}:
+        valid_molecule_requirements = (
+            analysis_kind in {"nucleotide", "auto"}
+            and normalized_requirements["genetic_code"] is None
+            and normalized_requirements["coding_status"] == "not-applicable"
+            and normalized_requirements["alignment_strategy"]
+            in {"auto", "mafft-nucleotide", "precomputed"}
+            and normalized_requirements["trimming_strategy"]
+            in {"none", "trimal-columns", "precomputed"}
+            and (
+                query_molecule == "noncoding-rna"
+                or not normalized_requirements["rna_structure_aware"]
+            )
+        )
+        resolved_analysis_kind = "nucleotide"
+    elif query_molecule in {"coding-dna", "coding-rna"}:
+        valid_molecule_requirements = (
+            analysis_kind in {"nucleotide", "codon", "auto"}
+            and normalized_requirements["genetic_code"] is not None
+            and normalized_requirements["coding_status"]
+            in {"clean", "disrupted", "unknown"}
+            and normalized_requirements["alignment_strategy"]
+            in {"auto", "translate-mafft-backtranslate", "macse", "precomputed"}
+            and normalized_requirements["trimming_strategy"]
+            in {"none", "protein-mask-to-codons", "precomputed"}
+            and not normalized_requirements["rna_structure_aware"]
+        )
+        resolved_analysis_kind = "codon" if analysis_kind == "auto" else analysis_kind
+    else:
+        valid_molecule_requirements = (
+            analysis_kind == "auto"
+            and normalized_requirements["genetic_code"] is None
+            and normalized_requirements["coding_status"] == "unknown"
+            and normalized_requirements["alignment_strategy"] == "auto"
+            and normalized_requirements["trimming_strategy"] == "none"
+            and not normalized_requirements["rna_structure_aware"]
+        )
+        resolved_analysis_kind = "unknown"
+    if not valid_molecule_requirements:
+        fail("Molecule and analysis requirements are incompatible.")
+    if (
+        resolved_analysis_kind == "unknown"
+        and intent == "visualization"
+        and normalized_inputs["tree_location"] != "absent"
+        and normalized_inputs["tree_data_kind"] in {"protein", "nucleotide", "codon"}
+    ):
+        # Visualization can start from a typed, materialized tree without pretending
+        # that the unavailable source sequence's molecule was inferred from letters.
+        resolved_analysis_kind = normalized_inputs["tree_data_kind"]
+    elif resolved_analysis_kind == "unknown" and (
+        normalized_inputs["alignment_location"] != "absent"
+        or normalized_inputs["tree_location"] != "absent"
+    ):
+        fail(
+            "Unknown or alphabet-ambiguous queries cannot reuse an untyped alignment or tree; "
+            "classify the molecule first. Visualization-only profiles may instead provide a "
+            "materialized tree with an explicit data kind."
+        )
+    normalized_requirements["resolved_analysis_kind"] = resolved_analysis_kind
+    if normalized_requirements["trimming"] != (
+        normalized_requirements["trimming_strategy"] not in {"none", "precomputed"}
+    ) and normalized_requirements["trimming_strategy"] != "precomputed":
+        fail("requirements.trimming must agree with trimming_strategy.")
+    expected_tree_kind = {
+        "protein": "protein",
+        "nucleotide": "nucleotide",
+        "codon": "codon",
+        "unknown": "unknown",
+    }[resolved_analysis_kind]
+    expected_alignment_kind = (
+        "codon"
+        if query_molecule in {"coding-dna", "coding-rna"}
+        else expected_tree_kind
+    )
+    if normalized_inputs["alignment_kind"] not in {"absent", expected_alignment_kind}:
+        fail("Existing alignment_kind conflicts with the resolved analysis kind.")
+    if normalized_inputs["tree_data_kind"] not in {"absent", expected_tree_kind}:
+        fail("Existing tree_data_kind conflicts with the resolved analysis kind.")
+    allowed_candidate_molecules = (
+        {"absent", "unknown"}
+        if query_molecule in {"unknown", "nucleotide-ambiguous"}
+        else {"absent", query_molecule}
+    )
+    if normalized_inputs["candidates_molecule"] not in allowed_candidate_molecules:
+        fail("Materialized candidate molecules must exactly match the query molecule.")
+    expected_bundle_kind = {
+        "protein": "protein-fasta-metadata",
+        "noncoding-dna": "noncoding-nucleotide-fasta-metadata",
+        "noncoding-rna": "noncoding-nucleotide-fasta-metadata",
+        "coding-dna": (
+            "clean-cds-translations-metadata"
+            if normalized_requirements["coding_status"] == "clean"
+            else (
+                "disrupted-cds-metadata"
+                if normalized_requirements["coding_status"] == "disrupted"
+                else "unknown"
+            )
+        ),
+        "coding-rna": (
+            "clean-cds-translations-metadata"
+            if normalized_requirements["coding_status"] == "clean"
+            else (
+                "disrupted-cds-metadata"
+                if normalized_requirements["coding_status"] == "disrupted"
+                else "unknown"
+            )
+        ),
+        "nucleotide-ambiguous": "unknown",
+        "unknown": "unknown",
+    }[query_molecule]
+    if normalized_inputs["candidate_bundle_kind"] not in {
+        "absent",
+        expected_bundle_kind,
+    }:
+        fail(
+            "candidate_bundle_kind is incomplete or incompatible with the declared molecule "
+            "and coding status. Clean CDS bundles must include matched translations and metadata."
+        )
     return {
-        "schema_version": ENVIRONMENT_PROFILE_SCHEMA_VERSION,
+        "schema_version": source_profile_version,
         "profile_id": profile_id,
         "intent": intent,
         "inputs": normalized_inputs,
@@ -2984,6 +4923,10 @@ def compile_environment_route(
     used_host_tools: set[str] = set()
     same_machine = target in {"local", "host-only"}
     effective_host_snapshot = snapshot if same_machine else host_snapshot
+    query_molecule = inputs["query_molecule"]
+    analysis_kind = requirements["resolved_analysis_kind"]
+    molecule_classified = query_molecule not in {"unknown", "nucleotide-ambiguous"}
+    coding_molecule = query_molecule in {"coding-dna", "coding-rna"}
 
     def compute_tool(name: str) -> bool:
         return bool(
@@ -3083,12 +5026,31 @@ def compile_environment_route(
     metadata_location = inputs["metadata_location"]
     sequence_database_location = inputs["sequence_database_location"]
     sequence_database_format = inputs["sequence_database_format"]
-    compatible_search_names = {
-        "blast": ("blastp",),
-        "mmseqs2": ("mmseqs2",),
-        "both": ("blastp", "mmseqs2"),
-        "none": (),
-    }[sequence_database_format]
+    sequence_database_molecule = inputs["sequence_database_molecule"]
+    expected_database_molecule = (
+        "protein" if query_molecule == "protein" else "nucleotide"
+    )
+    database_molecule_compatible = bool(
+        molecule_classified
+        and sequence_database_molecule == expected_database_molecule
+    )
+    blast_search_name = "blastp" if query_molecule == "protein" else "blastn"
+    compatible_search_names = (
+        {
+            "blast": (blast_search_name,),
+            "mmseqs2": ("mmseqs2",),
+            "both": (blast_search_name, "mmseqs2"),
+            "none": (),
+        }[sequence_database_format]
+        if database_molecule_compatible
+        else ()
+    )
+    if (
+        sequence_database_location != "absent"
+        and molecule_classified
+        and not database_molecule_compatible
+    ):
+        warnings.append("SEQUENCE_DATABASE_MOLECULE_MISMATCH")
     compute_search_tools = [
         name for name in compatible_search_names if compute_tool(name)
     ]
@@ -3236,14 +5198,69 @@ def compile_environment_route(
         and taxonomy_possible_at(planner_site)
         and can_reach(location_for_site(planner_site), "compute-target")
     )
-    alignment_flow_ready = bool(
+    existing_alignment_ready = bool(
         can_reach(alignment_location, "compute-target")
-        or (reference_flow_ready and scheduler_ready and compute_tool("mafft"))
     )
-    trimming_ready = bool(
-        not requirements["trimming"]
-        or (scheduler_ready and compute_tool("trimal"))
+    selected_alignment_route: str | None = None
+    requested_alignment = requirements["alignment_strategy"]
+    if existing_alignment_ready:
+        selected_alignment_route = "existing-alignment"
+    elif molecule_classified and not coding_molecule:
+        if (
+            analysis_kind == "protein"
+            and requested_alignment in {"auto", "mafft-protein"}
+            and compute_tool("mafft")
+        ):
+            selected_alignment_route = "mafft-protein"
+        elif (
+            analysis_kind == "nucleotide"
+            and requested_alignment in {"auto", "mafft-nucleotide"}
+        ):
+            if requirements["rna_structure_aware"] and compute_tool("mafft-qinsi"):
+                selected_alignment_route = "mafft-qinsi"
+            elif not requirements["rna_structure_aware"] and compute_tool("mafft"):
+                selected_alignment_route = "mafft-nucleotide"
+    elif coding_molecule:
+        coding_status = requirements["coding_status"]
+        if (
+            coding_status == "clean"
+            and requirements["genetic_code"] in TRIMAL_BACKTRANS_GENETIC_CODES
+            and requested_alignment in {"auto", "translate-mafft-backtranslate"}
+            and compute_tool("mafft")
+            and compute_tool("trimal")
+        ):
+            selected_alignment_route = "translate-mafft-trimal-backtranslate"
+        elif (
+            coding_status in {"clean", "disrupted"}
+            and requested_alignment in {"auto", "macse"}
+            and compute_tool("macse")
+            and not requirements["trimming"]
+        ):
+            selected_alignment_route = "macse-codon-aware"
+    alignment_flow_ready = bool(
+        existing_alignment_ready
+        or (
+            molecule_classified
+            and reference_flow_ready
+            and scheduler_ready
+            and selected_alignment_route is not None
+        )
     )
+    if existing_alignment_ready:
+        trimming_ready = bool(
+            not requirements["trimming"]
+            or requirements["trimming_strategy"] == "precomputed"
+            or (not coding_molecule and scheduler_ready and compute_tool("trimal"))
+        )
+    elif selected_alignment_route == "translate-mafft-trimal-backtranslate":
+        trimming_ready = True
+    elif selected_alignment_route == "macse-codon-aware":
+        trimming_ready = not requirements["trimming"]
+    else:
+        trimming_ready = bool(
+            not requirements["trimming"]
+            or (not coding_molecule and scheduler_ready and compute_tool("trimal"))
+        )
     generated_root_ready = bool(
         not requirements["rooted_tree"]
         or choose_root_site("compute-target") is not None
@@ -3257,7 +5274,8 @@ def compile_environment_route(
         )
     )
     accurate_regeneration_ready = bool(
-        alignment_flow_ready
+        molecule_classified
+        and alignment_flow_ready
         and scheduler_ready
         and trimming_ready
         and clustering_stack_ready
@@ -3265,7 +5283,9 @@ def compile_environment_route(
         and compute_tool("iqtree2")
     )
     fast_regeneration_ready = bool(
-        alignment_flow_ready
+        molecule_classified
+        and analysis_kind != "codon"
+        and alignment_flow_ready
         and scheduler_ready
         and trimming_ready
         and clustering_stack_ready
@@ -3337,6 +5357,20 @@ def compile_environment_route(
     if 1 not in required_steps:
         add_stage(1, "resolve-query", "skipped", "none", "not-required", (), "NOT_REQUIRED", "The selected intent starts from an existing downstream artifact.")
         query_ready = True
+    elif not molecule_classified:
+        add_stage(
+            1,
+            "resolve-query",
+            "blocked",
+            "host",
+            "classify-molecule-from-metadata-and-user-review",
+            (),
+            "MOLECULE_CLASSIFICATION_REQUIRED",
+            "The molecule type is unknown or alphabet-ambiguous. Resolve it from accession "
+            "metadata or explicit review; sequence letters alone cannot choose a protein or "
+            "nucleotide workflow.",
+        )
+        query_ready = False
     elif inputs["query_resolved"] and query_location != "absent":
         add_stage(1, "resolve-query", "ready", environment_for_location(query_location), "materialized-query", ("Python 3.10+",), "QUERY_ALREADY_MATERIALIZED", "A resolved query record is materialized at the declared location.")
         query_ready = True
@@ -3447,12 +5481,64 @@ def compile_environment_route(
     elif not can_reach(reference_location, "compute-target"):
         add_stage(6, "align-and-assess-conservation", "blocked", target, "input-location-unavailable", ("authorized file transfer",), "FILE_TRANSFER_CAPABILITY_MISSING", "The approved reference FASTA cannot reach the selected compute target.")
         working_alignment_location = "absent"
-    elif compute_tool("mafft"):
+    elif selected_alignment_route == "mafft-protein":
         mark_tool("mafft", "compute-target")
-        add_stage(6, "align-and-assess-conservation", "ready", target, "mafft", ("MAFFT",), "MAFFT_AVAILABLE", "MAFFT is available on the compute target.")
+        add_stage(6, "align-and-assess-conservation", "ready", target, "mafft-protein", ("MAFFT --amino",), "PROTEIN_MSA_AVAILABLE", "MAFFT is available for the declared protein alignment.")
         working_alignment_location = "compute-target"
+    elif selected_alignment_route == "mafft-nucleotide":
+        mark_tool("mafft", "compute-target")
+        add_stage(6, "align-and-assess-conservation", "ready", target, "mafft-nucleotide", ("MAFFT --nuc",), "NUCLEOTIDE_MSA_AVAILABLE", "MAFFT is available for the declared nucleotide alignment; molecule type is forced rather than guessed from letters.")
+        working_alignment_location = "compute-target"
+    elif selected_alignment_route == "mafft-qinsi":
+        mark_tool("mafft-qinsi", "compute-target")
+        add_stage(6, "align-and-assess-conservation", "ready", target, "mafft-qinsi", ("MAFFT Q-INS-i (mafft-qinsi)",), "RNA_STRUCTURE_MSA_AVAILABLE", "The dedicated mafft-qinsi executable is available for the explicitly structure-aware noncoding-RNA route.")
+        working_alignment_location = "compute-target"
+    elif selected_alignment_route == "translate-mafft-trimal-backtranslate":
+        mark_tool("mafft", "compute-target")
+        mark_tool("trimal", "compute-target")
+        add_stage(6, "align-and-assess-conservation", "ready", target, selected_alignment_route, ("validated CDS translations", "MAFFT --amino", "trimAl -backtrans"), "CODON_ALIGNMENT_AVAILABLE", "Clean CDS can be aligned as validated proteins and deterministically backtranslated to complete codon triplets.")
+        working_alignment_location = "compute-target"
+    elif selected_alignment_route == "macse-codon-aware":
+        mark_tool("macse", "compute-target")
+        add_stage(6, "align-and-assess-conservation", "conditional", target, selected_alignment_route, ("MACSE",), "MACSE_REVIEW_REQUIRED", "MACSE can produce a review artifact, but frameshift and stop symbols require an explicit export policy and a new typed precomputed-alignment profile before inference.")
+        working_alignment_location = "absent"
     else:
-        add_stage(6, "align-and-assess-conservation", "blocked", target, "missing-mafft", ("MAFFT",), "MAFFT_REQUIRED", "Protein-tree execution requires MAFFT; no silent MSA-tool substitution is allowed.")
+        if not molecule_classified:
+            reason_code = "MOLECULE_CLASSIFICATION_REQUIRED"
+            reason = "Alignment cannot be selected until the molecule type is resolved."
+            software = ()
+        elif requirements["alignment_strategy"] == "precomputed":
+            reason_code = "PRECOMPUTED_ALIGNMENT_REQUIRED"
+            reason = "The profile explicitly requires a precomputed alignment, but no reachable alignment artifact was declared."
+            software = ("typed precomputed alignment",)
+        elif requirements["rna_structure_aware"]:
+            reason_code = "MAFFT_QINSI_REQUIRED"
+            reason = "Structure-aware noncoding RNA requires the dedicated mafft-qinsi executable; ordinary MAFFT is not an equivalent route."
+            software = ("MAFFT Q-INS-i (mafft-qinsi)",)
+        elif coding_molecule and requirements["coding_status"] == "unknown":
+            reason_code = "CODING_STATUS_REQUIRED"
+            reason = "Coding status, frame, stops, and frameshift state must be reviewed before selecting a codon aligner."
+            software = ("translation QC or MACSE",)
+        elif coding_molecule and requirements["coding_status"] == "disrupted":
+            reason_code = "MACSE_REQUIRED"
+            reason = "Disrupted CDS requires MACSE or a prevalidated codon alignment; ordinary nucleotide MAFFT is not a substitute."
+            software = ("MACSE",)
+        elif (
+            coding_molecule
+            and requirements["genetic_code"] not in TRIMAL_BACKTRANS_GENETIC_CODES
+        ):
+            reason_code = "NONSTANDARD_GENETIC_CODE_ROUTE_REQUIRED"
+            reason = "This genetic code requires a reviewed MACSE/PAL2NAL or precomputed codon route because trimAl checks the universal stop set."
+            software = ("MACSE or reviewed PAL2NAL",)
+        elif coding_molecule:
+            reason_code = "CODON_BACKTRANSLATION_REQUIRED"
+            reason = "Clean CDS requires MAFFT protein alignment plus trimAl backtranslation, or an explicitly selected MACSE/precomputed route."
+            software = ("MAFFT", "trimAl -backtrans")
+        else:
+            reason_code = "MAFFT_REQUIRED"
+            reason = "The declared protein or nucleotide analysis requires MAFFT; no silent MSA-tool substitution is allowed."
+            software = ("MAFFT",)
+        add_stage(6, "align-and-assess-conservation", "blocked", target, "missing-molecule-compatible-alignment", software, reason_code, reason)
         working_alignment_location = "absent"
 
     if 7 not in required_steps:
@@ -3461,11 +5547,26 @@ def compile_environment_route(
         add_stage(7, "trim-and-test-sensitivity", "blocked", target, "scheduler-unavailable", (scheduler,), "SCHEDULER_LAUNCHER_MISSING", "The selected HPC scheduler launcher was not observed in the target snapshot.")
     elif next(item for item in stages if item["step"] == 6)["status"] == "blocked":
         add_stage(7, "trim-and-test-sensitivity", "blocked", target, "dependency-blocked", ("approved alignment",), "UPSTREAM_ALIGNMENT_CAPABILITY_MISSING", "Trimming cannot start until an alignment is reachable.")
+    elif coding_molecule and existing_alignment_ready:
+        if not requirements["trimming"]:
+            add_stage(7, "trim-and-test-sensitivity", "ready", target, "review-existing-codon-alignment", (), "TRIMMING_DISABLED_EXPLICITLY", "The existing codon alignment is retained untrimmed after frame, ID, and triplet checks.")
+        elif requirements["trimming_strategy"] == "precomputed":
+            add_stage(7, "trim-and-test-sensitivity", "ready", target, "review-precomputed-codon-mask", (), "PRECOMPUTED_CODON_TRIM_AVAILABLE", "A precomputed codon-safe mask is declared and still requires triplet and source-CDS verification.")
+        else:
+            add_stage(7, "trim-and-test-sensitivity", "blocked", target, "codon-safe-mask-missing", ("protein-derived codon mask",), "CODON_SAFE_TRIMMING_REQUIRED", "Direct nucleotide-column trimming can break codon phase; supply a verified triplet-safe mask or regenerate from the protein alignment.")
+    elif selected_alignment_route == "translate-mafft-trimal-backtranslate":
+        mark_tool("trimal", "compute-target")
+        if requirements["trimming"]:
+            add_stage(7, "trim-and-test-sensitivity", "ready", target, "protein-mask-to-codons", ("trimAl protein mask + -backtrans",), "CODON_SAFE_TRIMMING_AVAILABLE", "Protein columns are filtered first and the same retained-column mask is backtranslated to full codon triplets.")
+        else:
+            add_stage(7, "trim-and-test-sensitivity", "ready", target, "untrimmed-protein-mask-backtranslation", ("trimAl -backtrans",), "CODON_BACKTRANSLATION_AVAILABLE", "No columns are removed, but backtranslation is still required to create the codon alignment.")
+    elif selected_alignment_route == "macse-codon-aware":
+        add_stage(7, "trim-and-test-sensitivity", "blocked", target, "macse-export-review-gate", ("reviewed MACSE export", "typed precomputed codon alignment"), "MACSE_EXPORT_POLICY_REQUIRED", "MACSE output is not automatically promoted to IQ-TREE input. Review frameshift/stop handling, export a valid codon alignment, verify IDs/triplets, and rerun routing with that precomputed artifact.")
     elif not requirements["trimming"]:
         add_stage(7, "trim-and-test-sensitivity", "ready", target, "reviewed-untrimmed-route", (), "TRIMMING_DISABLED_EXPLICITLY", "The profile explicitly requests a reviewed untrimmed primary alignment.")
     elif compute_tool("trimal"):
         mark_tool("trimal", "compute-target")
-        add_stage(7, "trim-and-test-sensitivity", "ready", target, "trimal", ("trimAl",), "TRIMAL_AVAILABLE", "trimAl is available for the requested sensitivity profiles.")
+        add_stage(7, "trim-and-test-sensitivity", "ready", target, "trimal-columns", ("trimAl",), "TRIMAL_AVAILABLE", "trimAl is available for the declared protein or direct-nucleotide sensitivity profiles.")
     else:
         add_stage(7, "trim-and-test-sensitivity", "blocked", target, "missing-trimal", ("trimAl",), "TRIMAL_REQUIRED", "Trimming is enabled, so trimAl cannot be silently disabled or replaced.")
 
@@ -3494,7 +5595,10 @@ def compile_environment_route(
         inference_tool = "iqtree2" if selected_tree_mode == "accurate" else "fasttree"
         display_tool = "IQ-TREE2" if selected_tree_mode == "accurate" else "FastTree"
         missing_code = "IQTREE2_REQUIRED" if selected_tree_mode == "accurate" else "FASTTREE_REQUIRED"
-        if not compute_tool(inference_tool):
+        if selected_tree_mode == "quick" and analysis_kind == "codon":
+            add_stage(8, "infer-root-and-check-tree", "blocked", target, "fasttree-codon-unavailable", ("IQ-TREE2 codon model",), "FASTTREE_CODON_MODEL_UNAVAILABLE", "FastTree has no codon substitution model; the route cannot silently reinterpret codon data as independent nucleotide sites.")
+            routed_tree_location = "absent"
+        elif not compute_tool(inference_tool):
             if selected_tree_mode == "accurate" and (
                 compute_tool("iqtree3") or compute_tool("iqtree")
             ):
@@ -3521,7 +5625,10 @@ def compile_environment_route(
                     routed_tree_location = location_for_site(root_site)
                     software.append("annotation-preserving tree I/O")
                 reason_code = "IQTREE2_AVAILABLE" if selected_tree_mode == "accurate" else "FASTTREE_AVAILABLE"
-                reason = "The accurate route uses IQ-TREE2; rooting is a separate derivative step." if selected_tree_mode == "accurate" else "The quick route uses approximate ML and SH-like local support; rooting is a separate derivative step."
+                if selected_tree_mode == "accurate":
+                    reason = f"The accurate route uses IQ-TREE2 with explicit {analysis_kind} input semantics; rooting is a separate derivative step."
+                else:
+                    reason = f"The quick route uses FastTree in explicit {analysis_kind} mode with SH-like local support; rooting is a separate derivative step."
                 add_stage(8, "infer-root-and-check-tree", "ready", stage_environment, route_label, tuple(software), reason_code, reason)
     else:
         add_stage(8, "infer-root-and-check-tree", "blocked", target, "missing-tree-capability", ("complete tree-inference capability",), "TREE_STACK_INCOMPLETE", f"The explicit {selected_tree_mode or intent} route is incomplete.")
@@ -3699,7 +5806,52 @@ def compile_environment_route(
         if effective_host_snapshot is not None
         else None
     )
+    selected_search_mode = "none"
+    if local_search_tools:
+        selected_search_mode = {
+            "blastp": "protein-protein",
+            "blastn": "nucleotide-nucleotide",
+            "mmseqs2": f"mmseqs2-{expected_database_molecule}",
+        }.get(local_search_tools[0], local_search_tools[0])
+    elif any(
+        stage["route"] in {"authorized-database-discovery", "authorized-database-lookup"}
+        for stage in stages
+    ):
+        selected_search_mode = "provider-molecule-aware"
+    transformations: List[Dict[str, Any]] = []
+    if query_molecule in {"coding-rna", "noncoding-rna"}:
+        transformations.append(
+            {
+                "operation": "materialize-rna-analysis-copy",
+                "status": "required",
+                "reason_code": "RNA_SOURCE_ENCODING_AND_ANALYSIS_COPY_REQUIRED",
+            }
+        )
+    if selected_alignment_route == "translate-mafft-trimal-backtranslate":
+        transformations.extend(
+            [
+                {
+                    "operation": "validate-and-use-cds-translations",
+                    "status": "required",
+                    "reason_code": "CDS_TRANSLATION_QC_REQUIRED",
+                },
+                {
+                    "operation": "backtranslate-protein-alignment",
+                    "status": "required",
+                    "reason_code": "CODON_BACKTRANSLATION_REQUIRED",
+                },
+            ]
+        )
+    elif selected_alignment_route == "macse-codon-aware":
+        transformations.append(
+            {
+                "operation": "export-macse-frameshift-symbols",
+                "status": "review-required",
+                "reason_code": "MACSE_EXPORT_POLICY_REQUIRED",
+            }
+        )
     decision_core = {
+        "source_profile_schema_version": profile["schema_version"],
         "profile_id": profile["profile_id"],
         "profile_sha256": profile_hash,
         "compute_environment_id": snapshot["environment_id"],
@@ -3711,6 +5863,24 @@ def compile_environment_route(
         ),
         "host_snapshot_sha256": host_snapshot_hash,
         "intent": intent,
+        "resolved_query_molecule": query_molecule,
+        "selected_search_mode": selected_search_mode,
+        "selected_analysis_kind": analysis_kind,
+        "selected_alignment_kind": (
+            "codon"
+            if coding_molecule
+            else (
+                analysis_kind
+                if analysis_kind in {"protein", "nucleotide", "codon"}
+                else "unknown"
+            )
+        ),
+        "selected_alignment_route": selected_alignment_route,
+        "selected_trimming_strategy": requirements["trimming_strategy"],
+        "selected_tree_data_kind": analysis_kind,
+        "selected_tree_model_family": analysis_kind,
+        "genetic_code": requirements["genetic_code"],
+        "transformations": transformations,
         "selected_route": route_name,
         "selected_tree_mode": selected_tree_mode,
         "compute_target": target,
@@ -3851,7 +6021,11 @@ def build_parser() -> argparse.ArgumentParser:
         "route",
         help="Compile a workflow decision for one explicit capability profile and compute target.",
     )
-    route.add_argument("--profile", required=True, help="Environment profile 0.1 JSON file.")
+    route.add_argument(
+        "--profile",
+        required=True,
+        help="Environment profile 0.1 (legacy protein) or molecule-aware 0.2 JSON file.",
+    )
     route.add_argument(
         "--snapshot",
         help="Doctor snapshot JSON from the actual compute target; omit to probe the current environment.",
