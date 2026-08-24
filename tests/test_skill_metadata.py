@@ -127,6 +127,9 @@ class SkillPackageTests(unittest.TestCase):
             "broad_group",
             "taxon_scope",
             "gene_or_markers",
+            "conservation_class",
+            "conservation_scope",
+            "conservation_basis",
             "molecule_type",
             "dataset_scale",
             "msa_tool",
@@ -160,6 +163,9 @@ class SkillPackageTests(unittest.TestCase):
             "journal",
             "taxon_scope",
             "gene_or_markers",
+            "conservation_class",
+            "conservation_scope",
+            "conservation_basis",
             "molecule_type",
             "dataset_scale",
             "msa_tool",
@@ -252,6 +258,42 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn("explicit-none", trimming_states)
         self.assertIn("not-reported", trimming_states)
 
+        conservation_classes = {
+            "universal-or-deep-core",
+            "clade-conserved-marker",
+            "broadly-conserved-gene-family",
+            "variable-multigene-family",
+            "lineage-specific-or-rapidly-evolving",
+            "mixed-conservation-panel",
+            "not-applicable",
+        }
+        self.assertEqual(
+            {row["conservation_class"] for row in rows}, conservation_classes
+        )
+        for row in rows:
+            self.assertNotIn(
+                row["conservation_class"],
+                {"conserved", "non-conserved", "nonconserved"},
+            )
+            self.assertGreaterEqual(len(row["conservation_scope"].split()), 2)
+            self.assertGreaterEqual(len(row["conservation_basis"].split()), 4)
+
+        by_analysis = {row["analysis_id"]: row for row in rows}
+        expected_routing = {
+            "myrmicini-uce": "clade-conserved-marker",
+            "eukaryote-ccm-enzyme-trees": "broadly-conserved-gene-family",
+            "early-hexapod-receptor-sensitivity": "variable-multigene-family",
+            "ciliate-lgt-proteins": "lineage-specific-or-rapidly-evolving",
+            "ska2-gubbins-recomb": "not-applicable",
+            "alifilter-cyanobacteria-benchmark": "not-applicable",
+            "cloak-mammal-ortholog-benchmark": "not-applicable",
+            "asgard-phylome-ensemble": "mixed-conservation-panel",
+        }
+        for analysis_id, expected_class in expected_routing.items():
+            self.assertEqual(
+                by_analysis[analysis_id]["conservation_class"], expected_class
+            )
+
         pseudoalignments = [
             row for row in rows if "pseudoalignment" in row["molecule_type"].lower()
         ]
@@ -260,12 +302,33 @@ class SkillPackageTests(unittest.TestCase):
             self.assertNotIn("MAFFT", row["msa_tool"])
             self.assertNotIn("trimAl", row["trimming_method"])
             self.assertIn("pseudoalignment", row["curator_note"].lower())
+            self.assertEqual(row["conservation_class"], "not-applicable")
 
     def test_codex_metadata_matches_the_skill(self) -> None:
         content = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
         self.assertIn('display_name: "Gene-to-Reference Tree"', content)
         self.assertRegex(content, r'short_description: "[^"\n]{25,64}"')
         self.assertIn("$bio-gene-to-reference-tree", content)
+
+    def test_conservation_assessment_is_a_hash_bound_review_artifact(self) -> None:
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (SKILL_ROOT / "references" / "workflow.md").read_text(encoding="utf-8")
+        contract = (SKILL_ROOT / "references" / "output-contract.md").read_text(
+            encoding="utf-8"
+        )
+        for content in (skill, workflow, contract):
+            self.assertIn("conservation_assessment.tsv", content)
+        for field in (
+            "conservation_class",
+            "conservation_scope",
+            "conservation_basis",
+            "evidence_ids",
+            "assessment_status",
+            "limitations",
+        ):
+            self.assertIn(field, contract)
+        self.assertIn("SHA-256", contract)
+        self.assertIn("reopen", contract)
 
     def test_v03_workflow_and_v02_schema_surfaces_are_synchronized(self) -> None:
         script = (SKILL_ROOT / "scripts" / "gene_to_tree.py").read_text(encoding="utf-8")

@@ -79,6 +79,8 @@ Keep the representative/member mapping, annotate `cluster_id`, and re-run refere
 
 First confirm that the approved inputs are homologous protein sequences for one gene or protein family. Codon matrices, target-capture loci, concatenated ortholog sets, pangenome core alignments, and reference-mapped SNP pseudoalignments are different data architectures. Use their catalog rows only as contextual evidence; route nucleotide or genome-scale material to a purpose-specific workflow instead of silently applying this protein MAFFT/trimAl path.
 
+Describe conservation with a scale, not a bare binary label. Assign a provisional `conservation_class`, `conservation_scope`, and `conservation_basis` using the controlled vocabulary in [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md). Distinguish deep core markers, clade-conserved markers, broadly conserved families, variable multigene families, lineage-specific or rapidly evolving families, mixed panels, and workflows where the label is not applicable. Base the assignment on taxonomic distribution, copy-number or orthology evidence, marker design, and domain architecture; do not infer sequence conservation from a familiar gene name or from similarity alone. Record the decision in `evidence/conservation_assessment.tsv`, review it before choosing the primary alignment, and bind its hash to the alignment approval and final checksums as specified in [output-contract.md](references/output-contract.md).
+
 Use MAFFT and choose the mode from sequence count and architecture, not divergence alone:
 
 - `auto` for general routing;
@@ -88,7 +90,7 @@ Use MAFFT and choose the mode from sequence count and architecture, not divergen
 
 Inspect coverage, gap fraction, occupancy, conserved motifs, mixed domains, fragments, fusions, duplicate tip IDs, and suspicious long branches. Preserve `alignment.raw.faa`. Read [alignment-and-tree.md](references/alignment-and-tree.md) before choosing or running MAFFT, trimAl, FastTree, or IQ-TREE2.
 
-When recent literature is used to choose or justify an alignment strategy, read [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md) and filter its companion [TSV catalog](references/recent-msa-trimming-evidence.tsv) by molecule, gene or marker architecture, dataset scale, and taxonomic depth. Treat matching rows as precedents to verify at the source, never as automatic defaults.
+When recent literature is used to choose or justify an alignment strategy, read [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md) and filter its companion [TSV catalog](references/recent-msa-trimming-evidence.tsv) by molecule, gene or marker architecture, conservation class and scope, dataset scale, and taxonomic depth. Treat matching rows as precedents to verify at the source, never as automatic defaults.
 
 ### 7. Treat trimming as a sensitivity analysis
 
@@ -157,8 +159,8 @@ Do not fabricate a lookup result, sequence, TaxID, orthology call, citation, too
 - [tool-routing.md](references/tool-routing.md): authoritative databases, search tiers, and executable boundaries.
 - [reference-selection.md](references/reference-selection.md): selection, clustering, taxonomic balance, outgroups, and reason codes.
 - [alignment-and-tree.md](references/alignment-and-tree.md): MAFFT, trimAl, FastTree, IQ-TREE2, QC, and support semantics.
-- [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md): a recent-literature routing guide, reporting-state semantics, and refresh protocol.
-- [recent-msa-trimming-evidence.tsv](references/recent-msa-trimming-evidence.tsv): machine-readable 2023-08-24 to 2026-08-24 MSA and post-alignment evidence, one row per analysis workflow.
+- [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md): a recent-literature routing guide, scale-aware gene-conservation classes, reporting-state semantics, and refresh protocol.
+- [recent-msa-trimming-evidence.tsv](references/recent-msa-trimming-evidence.tsv): machine-readable 2023-08-24 to 2026-08-24 MSA and post-alignment evidence with conservation class, scope, and basis, one row per analysis workflow.
 - [itol-and-literature.md](references/itol-and-literature.md): iTOL files, metadata, evidence search, and gene-tree/species-tree comparison.
 - [ggtree-visualization.md](references/ggtree-visualization.md): local ggtree/ggplot2 rendering, exact tip joins, support semantics, and vector exports.
 - [workflow.md](references/workflow.md): states, gates, failure conditions, and viral branch.

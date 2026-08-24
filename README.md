@@ -198,7 +198,25 @@ The workflow supports:
 | Full sequence metadata | Yes | Generates TSV | — |
 | Recent phylogenetic evidence | Yes | Emits search plan only | Literature/taxonomy access required |
 | Network-free review bundle | Yes | Fully implemented | Python 3.10+; CI-tested on 3.10 and 3.12 |
-The bundled [three-year MSA and trimming evidence catalog](skills/bio-gene-to-reference-tree/references/recent-msa-trimming-evidence.md) links every workflow to its full Methods source and preserves exact, partial, explicit-no-trim, and not-reported states instead of guessing missing parameters.
+The bundled [three-year MSA and trimming evidence catalog](skills/bio-gene-to-reference-tree/references/recent-msa-trimming-evidence.md) links every workflow to its full Methods source and preserves exact, partial, explicit-no-trim, and not-reported states instead of guessing missing parameters. Every row also records a scale-aware conservation class, the taxonomic scope where that label applies, and its evidence basis.
+
+### Conservation-aware method routing
+
+The catalog avoids an unscoped conserved/non-conserved switch. Instead it separates deep core markers, clade-conserved markers, broadly conserved families, variable multigene families, lineage-specific or rapidly evolving families, mixed panels, and workflows where gene-level conservation is not applicable.
+
+| Approximate class | Example genes or marker types |
+|---|---|
+| Deep core | ribosomal proteins, translation/RNA-polymerase markers, validated bacterial/archaeal core proteins, deep single-copy panels |
+| Clade-conserved | 16S/18S/28S rDNA, lineage BUSCO/SCO sets, UCEs, Angiosperms353, COI/cytb or rbcL/matK at a suitable scale |
+| Broadly conserved family | central-metabolism enzymes, hydrogenases, aminoacyl-tRNA synthetases, cross-plant DFR homologues, vertebrate BRCA1 |
+| Variable multigene family | odorant/gustatory receptors, GT1, NPC2 and other duplicated families |
+| Lineage-specific or rapid | accessory or cluster genes, effectors, candidate LGT families, recent paralogues, highly divergent viral proteins |
+| Mixed biological panel | heterogeneous supermatrices and phylomes that still represent one biological analysis |
+| Not applicable | method benchmarks over unrelated datasets; genome-wide SNP pseudoalignments |
+
+These are routing labels, not measured rates or claims of orthology. The same family can move between categories when the taxonomic sampling, copy-number history, domain architecture, or analysis unit changes; the Skill therefore requires `conservation_scope` and `conservation_basis` alongside `conservation_class`, recorded in a hash-bound `evidence/conservation_assessment.tsv` review artifact.
+
+For the homepage BRCA1 example, the useful provisional label is `broadly-conserved-gene-family` **across the sampled vertebrates**: the reviewed records share the BRCA1 ortholog-group context and terminal RING/BRCT architecture, while the full-length proteins still contain difficult, more variable regions. It would be misleading to call BRCA1 simply “conserved” without that scope and basis.
 
 ## Repository layout
 
