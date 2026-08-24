@@ -25,7 +25,7 @@ Do not average confidence values across orthology resources. Treat disagreement 
 
 | Stage | Tool | Required behavior |
 |---|---|---|
-| Large-pool redundancy | MMseqs2 | Set identity, coverage, and coverage mode; protect study/outgroup |
+| Large-pool redundancy | MMseqs2 | Set identity, coverage, and coverage mode; protect `analysis_group=study|outgroup` |
 | Protein alignment | MAFFT | Record version, mode, threads, and raw MSA |
 | Trimming sensitivity | trimAl | Preserve raw MSA and all profiles; report retained columns |
 | Fast exploratory tree | FastTree | Label approximate ML and SH-like local support |

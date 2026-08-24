@@ -15,6 +15,7 @@ Unlike a “top N BLAST hits → alignment → tree” recipe, it keeps paralogs
 - **Make explicit:** query identity, biological objective, candidate provenance, ortholog/paralog policy, taxonomic sampling, and outgroup rationale.
 - **Review before inference:** selected and rejected references, raw-alignment QC, trimming sensitivity, rooting, model, and support semantics.
 - **Leave an audit trail:** stable reason codes, hashes, exact argument arrays, optional taxdump evidence, iTOL annotations, local figure settings, complete sequence metadata, and a literature-evidence plan.
+- **Load progressively:** one compact `SKILL.md` routes the agent to the current task file; deeper policies, contracts, guides, and evidence are opened only when that task needs them.
 - **Use across agents:** the installable directory follows the open [Agent Skills specification](https://agentskills.io/specification) and contains no vendor-specific workflow instructions.
 
 ## Executed example: human BRCA1
@@ -189,7 +190,7 @@ accession | raw protein | name + organism
   -> optional exact NCBI scientific-name/TaxID validation
   -> ortholog-first or homolog-first discovery
   -> taxonomically balanced references + candidate outgroups
-  -> optional role-aware MMseqs2 clustering
+  -> optional analysis-group-aware MMseqs2 clustering
   -> reference/outgroup approval
   -> scale-aware conservation assessment
   -> MAFFT + raw-MSA QC
@@ -207,6 +208,45 @@ The workflow supports:
 - `homolog-context` for broader family/paralog placement;
 - `within-species` for strains, isolates, alleles, or close copies;
 - `sequence_context: viral` for segment-aware analyses with recombination/reassortment warnings.
+
+## Progressive documentation architecture
+
+The repository adopts the indexed, on-demand loading idea illustrated by
+[`dev-skills`](https://github.com/jamestorrevillas/dev-skills), while keeping
+this scientific workflow as **one installable Skill**. Splitting the ten stages
+into ten separately discoverable Skills would create competing commands and
+duplicate scientific rules. Here, the hierarchy is:
+
+```text
+Level 0  SKILL.md frontmatter       -> automatic discovery
+Level 1  SKILL.md + workflow.md     -> route current state and enforce gates
+Level 2  references/steps/*.md      -> execute only the current task
+Level 3  shared references/scripts  -> load or run only when the task requests it
+```
+
+`SKILL.md` links every task directly, but instructs the agent not to preload
+all of them. A resumed run checks hashes and approvals and opens the earliest
+invalid or incomplete stage.
+
+| Step | Task module | Main hand-off |
+|---:|---|---|
+| 1 | [Resolve the query](skills/bio-gene-to-reference-tree/references/steps/01-resolve-query.md) | Stable local protein, versioned when authoritative, plus provenance |
+| 2 | [Define the objective](skills/bio-gene-to-reference-tree/references/steps/02-define-objective.md) | Explicit scope, relationship policy, and deliverables |
+| 3 | [Discover candidates](skills/bio-gene-to-reference-tree/references/steps/03-discover-candidates.md) | Broad candidate FASTA/metadata with acquisition evidence |
+| 4 | [Select references and outgroups](skills/bio-gene-to-reference-tree/references/steps/04-select-references-and-outgroups.md) | Hash-bound selection proposal for Gate 2 |
+| 5 | [Cluster expanded candidates](skills/bio-gene-to-reference-tree/references/steps/05-cluster-expanded-candidates.md) | Conditional MMseqs2 mapping and re-planned references |
+| 6 | [Align and assess conservation](skills/bio-gene-to-reference-tree/references/steps/06-align-and-assess-conservation.md) | Raw protein MSA, scale-aware conservation record, and QC |
+| 7 | [Trim and test sensitivity](skills/bio-gene-to-reference-tree/references/steps/07-trim-and-test-sensitivity.md) | Approved primary alignment and exact hash |
+| 8 | [Infer, root, and check the tree](skills/bio-gene-to-reference-tree/references/steps/08-infer-root-and-check-tree.md) | Unrooted tree plus optional separately approved rooted copy |
+| 9 | [Annotate and visualize](skills/bio-gene-to-reference-tree/references/steps/09-annotate-and-visualize.md) | iTOL roles, complete metadata, and optional SVG/PDF |
+| 10 | [Compare evidence and report](skills/bio-gene-to-reference-tree/references/steps/10-compare-evidence-and-report.md) | Current-literature comparison and completion bundle |
+
+Every task file has the same operational contract: when to read it, required
+inputs, procedure, required outputs, review/stop conditions, and supporting
+references. Each task owns its stage procedure; shared references own
+cross-stage state, validation, provenance, output-format, and evidence rules.
+The homepage and router remain navigational rather than duplicating exact task
+commands.
 
 ## Capability matrix
 
@@ -253,11 +293,29 @@ The executed BRCA1 run predates the conservation-assessment contract, so it is n
 skills/bio-gene-to-reference-tree/
   SKILL.md
   agents/openai.yaml
+  references/
+    workflow.md
+    steps/
+      01-resolve-query.md
+      02-define-objective.md
+      03-discover-candidates.md
+      04-select-references-and-outgroups.md
+      05-cluster-expanded-candidates.md
+      06-align-and-assess-conservation.md
+      07-trim-and-test-sensitivity.md
+      08-infer-root-and-check-tree.md
+      09-annotate-and-visualize.md
+      10-compare-evidence-and-report.md
+    taxonomy-resolution.md
+    tool-routing.md
+    output-contract.md
+    recent-msa-trimming-evidence.md + .tsv
+    ggtree-visualization.md
+    request/plan schemas
   scripts/
     gene_to_tree.py
     ncbi_taxonomy.py
     render_tree_ggtree.R
-  references/
   assets/
 examples/brca1/
   README.md
@@ -267,7 +325,7 @@ tests/
 .github/workflows/validate.yml
 ```
 
-The installable directory follows the open [Agent Skills specification](https://agentskills.io/specification). The shared `SKILL.md` frontmatter and body are the authoritative discovery and workflow surface for Codex, Cursor, Claude Code, and other compatible clients; no forked Cursor- or Claude-specific prompt is required. `agents/openai.yaml` adds optional Codex presentation metadata, while `.claude-plugin/marketplace.json` adds optional Claude Code distribution metadata; neither can change the scientific workflow or its review gates. The BRCA1 run stays outside the installable Skill so its executed artifacts do not consume agent context during ordinary installation. Repository-level tests enforce the portable frontmatter, local resource links, progressive-disclosure limits, schemas, deterministic workflow contract, portable bundle copies at documented client paths, thin client metadata, and worked-example integrity.
+The installable directory follows the open [Agent Skills specification](https://agentskills.io/specification). The shared `SKILL.md` frontmatter and body are the authoritative discovery and routing surface for Codex, Cursor, Claude Code, and other compatible clients; the task modules remain part of that same portable package, and no forked Cursor- or Claude-specific prompt is required. `agents/openai.yaml` adds optional Codex presentation metadata, while `.claude-plugin/marketplace.json` adds optional Claude Code distribution metadata; neither can change the scientific workflow or its review gates. The BRCA1 run stays outside the installable Skill so its executed artifacts do not consume agent context during ordinary installation. Repository-level tests enforce the portable frontmatter, complete ordered task router, nested local links and anchors, orphan-free references, progressive-disclosure limits, schemas, deterministic workflow contract, portable bundle copies at documented client paths, thin client metadata, and worked-example integrity.
 
 ## Run the offline review example
 

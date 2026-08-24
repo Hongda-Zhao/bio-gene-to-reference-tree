@@ -16,6 +16,26 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = REPOSITORY_ROOT / "skills" / "bio-gene-to-reference-tree"
+STEP_FILENAMES = (
+    "01-resolve-query.md",
+    "02-define-objective.md",
+    "03-discover-candidates.md",
+    "04-select-references-and-outgroups.md",
+    "05-cluster-expanded-candidates.md",
+    "06-align-and-assess-conservation.md",
+    "07-trim-and-test-sensitivity.md",
+    "08-infer-root-and-check-tree.md",
+    "09-annotate-and-visualize.md",
+    "10-compare-evidence-and-report.md",
+)
+STEP_REQUIRED_HEADINGS = (
+    "## When to read",
+    "## Required inputs",
+    "## Procedure",
+    "## Required outputs",
+    "## Review gate and stop conditions",
+    "## Supporting references",
+)
 
 
 class SkillPackageTests(unittest.TestCase):
@@ -53,29 +73,67 @@ class SkillPackageTests(unittest.TestCase):
     def test_progressive_disclosure_and_local_links(self) -> None:
         skill_document = SKILL_ROOT / "SKILL.md"
         skill_lines = skill_document.read_text(encoding="utf-8").splitlines()
-        self.assertLessEqual(len(skill_lines), 500)
+        self.assertLessEqual(len(skill_lines), 130)
 
         local_link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-        documents = [skill_document, *sorted((SKILL_ROOT / "references").glob("*.md"))]
+        reference_documents = sorted((SKILL_ROOT / "references").rglob("*.md"))
+        documents = [
+            skill_document,
+            REPOSITORY_ROOT / "README.md",
+            *reference_documents,
+        ]
+        link_graph: dict[Path, set[Path]] = {document.resolve(): set() for document in documents}
+
+        def heading_anchors(document: Path) -> set[str]:
+            anchors: set[str] = set()
+            occurrences: dict[str, int] = {}
+            for heading in re.findall(
+                r"^#{1,6}\s+(.+?)\s*$",
+                document.read_text(encoding="utf-8"),
+                flags=re.MULTILINE,
+            ):
+                plain = re.sub(r"[`*_~]", "", heading).lower()
+                slug = re.sub(r"[^\w\-\s]", "", plain)
+                slug = re.sub(r"\s+", "-", slug.strip())
+                count = occurrences.get(slug, 0)
+                occurrences[slug] = count + 1
+                anchors.add(slug if count == 0 else f"{slug}-{count}")
+            return anchors
+
         for document in documents:
             content = document.read_text(encoding="utf-8")
             for raw_target in local_link_pattern.findall(content):
-                if raw_target.startswith(("http://", "https://", "mailto:", "#")):
+                if raw_target.startswith(("http://", "https://", "mailto:")):
                     continue
-                relative_target = raw_target.split("#", 1)[0]
-                if not relative_target:
-                    continue
-                resolved_target = (document.parent / relative_target).resolve()
+                relative_target, separator, fragment = raw_target.partition("#")
+                resolved_target = (
+                    (document.parent / relative_target).resolve()
+                    if relative_target
+                    else document.resolve()
+                )
+                allowed_root = (
+                    REPOSITORY_ROOT
+                    if document == REPOSITORY_ROOT / "README.md"
+                    else SKILL_ROOT
+                )
                 self.assertTrue(
-                    resolved_target.is_relative_to(SKILL_ROOT.resolve()),
-                    f"Local link escapes the Skill directory: {document}: {raw_target}",
+                    resolved_target.is_relative_to(allowed_root.resolve()),
+                    f"Local link escapes its package: {document}: {raw_target}",
                 )
                 self.assertTrue(
                     resolved_target.exists(),
                     f"Broken local link: {document}: {raw_target}",
                 )
+                if resolved_target.suffix.lower() == ".md":
+                    link_graph.setdefault(document.resolve(), set()).add(resolved_target)
+                    if separator and fragment:
+                        self.assertIn(
+                            fragment,
+                            heading_anchors(resolved_target),
+                            f"Broken Markdown anchor: {document}: {raw_target}",
+                        )
 
-        for reference in sorted((SKILL_ROOT / "references").glob("*.md")):
+        for reference in reference_documents:
             lines = reference.read_text(encoding="utf-8").splitlines()
             if len(lines) > 100:
                 self.assertIn(
@@ -83,6 +141,88 @@ class SkillPackageTests(unittest.TestCase):
                     lines[:40],
                     f"Long reference needs an early table of contents: {reference}",
                 )
+
+        reachable = {skill_document.resolve()}
+        frontier = [skill_document.resolve()]
+        while frontier:
+            source = frontier.pop()
+            for target in link_graph.get(source, set()):
+                if target not in reachable:
+                    reachable.add(target)
+                    frontier.append(target)
+        orphaned = sorted(
+            str(path.relative_to(SKILL_ROOT))
+            for path in reference_documents
+            if path.resolve() not in reachable
+        )
+        self.assertEqual(orphaned, [], "Every reference must be reachable from SKILL.md")
+
+    def test_step_router_is_complete_ordered_and_uniform(self) -> None:
+        steps_directory = SKILL_ROOT / "references" / "steps"
+        actual = tuple(path.name for path in sorted(steps_directory.glob("*.md")))
+        self.assertEqual(actual, STEP_FILENAMES)
+        self.assertEqual(len(list(SKILL_ROOT.rglob("SKILL.md"))), 1)
+
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        routed_steps = tuple(
+            re.findall(r"\(references/steps/([^)#]+\.md)(?:#[^)]*)?\)", skill)
+        )
+        self.assertEqual(routed_steps, STEP_FILENAMES)
+
+        readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("## Progressive documentation architecture", readme)
+        readme_steps = tuple(
+            re.findall(
+                r"\(skills/bio-gene-to-reference-tree/references/steps/([^)#]+\.md)(?:#[^)]*)?\)",
+                readme,
+            )
+        )
+        self.assertEqual(readme_steps, STEP_FILENAMES)
+
+        for step_number, filename in enumerate(STEP_FILENAMES, start=1):
+            with self.subTest(step=filename):
+                path = steps_directory / filename
+                content = path.read_text(encoding="utf-8")
+                self.assertEqual(len(re.findall(r"^#\s+", content, flags=re.MULTILINE)), 1)
+                self.assertRegex(content, rf"(?m)^# Step {step_number} — .+$")
+                self.assertLessEqual(len(content.splitlines()), 100)
+                h2_headings = tuple(
+                    re.findall(r"^##\s+.+$", content, flags=re.MULTILINE)
+                )
+                self.assertEqual(h2_headings, STEP_REQUIRED_HEADINGS)
+                section_offsets = [content.index(heading) for heading in h2_headings]
+                for index, heading in enumerate(h2_headings):
+                    section_end = (
+                        section_offsets[index + 1]
+                        if index + 1 < len(section_offsets)
+                        else len(content)
+                    )
+                    section_body = content[
+                        section_offsets[index] + len(heading) : section_end
+                    ].strip()
+                    self.assertTrue(section_body, f"Empty task section: {path}: {heading}")
+                self.assertEqual(
+                    skill.count(f"(references/steps/{filename})"),
+                    1,
+                    "Each task must have one authoritative router entry",
+                )
+
+        retired_flat_references = (
+            "query-resolution.md",
+            "reference-selection.md",
+            "alignment-and-tree.md",
+            "itol-and-literature.md",
+        )
+        for filename in retired_flat_references:
+            self.assertFalse((SKILL_ROOT / "references" / filename).exists())
+
+        for exact_task_command in (
+            "mmseqs easy-linclust",
+            "iqtree2 -s",
+            '["trimal", "-in"',
+        ):
+            self.assertNotIn(exact_task_command, skill)
+            self.assertNotIn(exact_task_command, readme)
 
     def test_declared_resources_exist(self) -> None:
         expected = {
@@ -95,15 +235,11 @@ class SkillPackageTests(unittest.TestCase):
             "assets/candidates.example.tsv",
             "assets/conservation-assessment.example.tsv",
             "references/workflow.md",
-            "references/reference-selection.md",
             "references/output-contract.md",
             "references/tool-routing.md",
-            "references/query-resolution.md",
             "references/taxonomy-resolution.md",
-            "references/alignment-and-tree.md",
             "references/recent-msa-trimming-evidence.md",
             "references/recent-msa-trimming-evidence.tsv",
-            "references/itol-and-literature.md",
             "references/ggtree-visualization.md",
             "references/request-0.2.schema.json",
             "references/plan-0.2.schema.json",
@@ -111,8 +247,18 @@ class SkillPackageTests(unittest.TestCase):
             "agents/openai.yaml",
             "LICENSE",
         }
+        expected.update(f"references/steps/{filename}" for filename in STEP_FILENAMES)
         missing = sorted(path for path in expected if not (SKILL_ROOT / path).is_file())
         self.assertEqual(missing, [])
+        expected_references = {
+            Path(path) for path in expected if path.startswith("references/")
+        }
+        actual_references = {
+            path.relative_to(SKILL_ROOT)
+            for path in (SKILL_ROOT / "references").rglob("*")
+            if path.is_file()
+        }
+        self.assertEqual(actual_references, expected_references)
 
     def test_conservation_assessment_template_is_real_tsv(self) -> None:
         template = SKILL_ROOT / "assets" / "conservation-assessment.example.tsv"
@@ -345,12 +491,17 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn("explicit taxonomic scope", content)
 
     def test_conservation_assessment_is_a_hash_bound_review_artifact(self) -> None:
-        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        alignment_step = (
+            SKILL_ROOT
+            / "references"
+            / "steps"
+            / "06-align-and-assess-conservation.md"
+        ).read_text(encoding="utf-8")
         workflow = (SKILL_ROOT / "references" / "workflow.md").read_text(encoding="utf-8")
         contract = (SKILL_ROOT / "references" / "output-contract.md").read_text(
             encoding="utf-8"
         )
-        for content in (skill, workflow, contract):
+        for content in (alignment_step, workflow, contract):
             self.assertIn("conservation_assessment.tsv", content)
         for field in (
             "conservation_class",
@@ -396,7 +547,7 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn("taxonomy", request_schema["properties"])
         self.assertIn("taxonomy_plan", plan_schema["required"])
 
-    def test_portable_bundle_copies_to_cursor_and_claude_paths(self) -> None:
+    def test_portable_bundle_copies_to_codex_cursor_and_claude_paths(self) -> None:
         source_files = {
             path.relative_to(SKILL_ROOT)
             for path in SKILL_ROOT.rglob("*")
@@ -408,7 +559,7 @@ class SkillPackageTests(unittest.TestCase):
         self.assertFalse(any(path.is_symlink() for path in SKILL_ROOT.rglob("*")))
 
         vendor_skill_copies: list[Path] = []
-        for vendor_root_name in (".agents", ".cursor", ".claude"):
+        for vendor_root_name in (".agents", ".codex", ".cursor", ".claude"):
             vendor_root = REPOSITORY_ROOT / vendor_root_name
             if vendor_root.exists():
                 vendor_skill_copies.extend(vendor_root.rglob("SKILL.md"))
@@ -416,6 +567,7 @@ class SkillPackageTests(unittest.TestCase):
 
         destinations = (
             Path(".agents/skills/bio-gene-to-reference-tree"),
+            Path(".codex/skills/bio-gene-to-reference-tree"),
             Path(".cursor/skills/bio-gene-to-reference-tree"),
             Path(".claude/skills/bio-gene-to-reference-tree"),
         )

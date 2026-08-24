@@ -49,7 +49,7 @@ Present:
 - exact-name taxonomy evidence and taxdump hashes when enabled;
 - counts before/after every filter and cluster;
 - retained taxa and unsampled clades;
-- study, expanded, and outgroup roles;
+- `study`, `expanded`, and `outgroup` analysis groups, separate from biological ingroup/outgroup roles;
 - one-to-many, paralog, fragment, fusion, domain, and low-complexity warnings;
 - selected and rejected accessions with stable reason codes;
 - each proposed outgroup and taxonomic rationale;
