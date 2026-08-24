@@ -5,19 +5,19 @@
 
 **Build the reference set before you build the tree.**
 
-[What it does](#what-it-does) · [Install](#install) · [Progressive Skill](#progressive-skill) · [BRCA1 example](#brca1-example) · [Quick links](#quick-links)
+[What it does](#what-it-does) · [Install](#install) · [Progressive Skill](#progressive-skill) · [Nucleotide quick start](#nucleotide-quick-start) · [BRCA1 example](#brca1-example) · [Quick links](#quick-links)
 
 ## What it does
 
-An open, portable Agent Skill for building an auditable **protein gene tree** from an accession, amino-acid sequence, or protein/gene name plus organism.
+An open, portable Agent Skill for building an auditable **protein or nucleotide gene tree** from an accession, declared local sequence, or gene/protein/feature name plus organism.
 
-It resolves the query, finds and reviews homolog or ortholog candidates, selects references and outgroups, plans or runs MAFFT/trimAl and FastTree/IQ-TREE2 through available host tools, and produces iTOL or local ggtree/ggplot2 outputs. It avoids the unsafe shortcut of treating the top similarity hits as a ready-made reference set.
+It resolves the query, finds and reviews homolog or ortholog candidates, selects references and outgroups, plans molecule-specific MAFFT/trimAl and FastTree/IQ-TREE2 commands through available host tools, and produces iTOL or local ggtree/ggplot2 outputs. It avoids the unsafe shortcut of treating the top similarity hits as a ready-made reference set.
 
 > **Execution model:** deterministic `plan`/`route` modes do not run workflow tools. `doctor` defaults to passive `PATH` discovery; live retrieval, active version probes, and bioinformatics execution require separately approved host or local capabilities.
 
 | Stage | Main result |
 |---|---|
-| Query | Versioned record or hash-bound local protein with provenance |
+| Query | Versioned record or hash-bound, explicitly declared local molecule with provenance |
 | References | Selected and rejected candidates, reason codes, taxonomic balance, and outgroup rationale |
 | Alignment | Raw MSA, conservation assessment, QC, and trimming sensitivity |
 | Tree | Unrooted gene tree, optional approved rooted copy, model, and explicitly documented support method |
@@ -78,6 +78,16 @@ The ten task modules are directly addressable:
 
 The router loads one step at a time and retains review gates before reference approval, alignment choice, and tree inference.
 
+## Nucleotide quick start
+
+Request schema 0.3 supports comparable noncoding DNA/RNA regions and clean coding DNA/RNA. It never guesses molecule type from sequence letters: noncoding nucleotide uses MAFFT `--nuc` plus a DNA tree model, while eligible clean CDS uses verified translations, protein-guided MAFFT, and trimAl `-backtrans`. A clean CDS request then explicitly chooses either an IQ-TREE codon model or a nucleotide-site DNA model on the codon-preserving alignment. Frameshifted or disrupted CDS stops for reviewed MACSE handling rather than being treated as ordinary nucleotide.
+
+```text
+$bio-gene-to-reference-tree Build an auditable noncoding-dna gene tree from my resolved local FASTA, use only comparable homologous loci and an actual nucleotide search database, retain the unrooted tree, and report MAFFT --nuc plus IQ-TREE -st DNA commands.
+```
+
+See the [minimal request 0.3 JSON](skills/bio-gene-to-reference-tree/assets/request.nucleotide.example.json) and [sequence-type router](skills/bio-gene-to-reference-tree/references/sequence-type-routing.md) for RNA source-encoding provenance, CDS QC, exact commands, and hard stops.
+
 ## BRCA1 example
 
 ![Outgroup-rooted BRCA1 protein gene tree for 18 vertebrates](examples/brca1/figures/brca1-readme.svg)
@@ -110,6 +120,7 @@ Orange marks the focal human sequence, green marks added references, and gray ma
 | Install on Codex, Cursor, or Claude Code | [Installation guide](docs/installation.md) |
 | Read the agent entrypoint | [Canonical `SKILL.md`](skills/bio-gene-to-reference-tree/SKILL.md) |
 | Follow states and approval gates | [Workflow](skills/bio-gene-to-reference-tree/references/workflow.md) |
+| Choose protein, noncoding nucleotide, or clean CDS analysis | [Sequence-type router](skills/bio-gene-to-reference-tree/references/sequence-type-routing.md) |
 | Match tasks to local, browser, or HPC capabilities | [Environment and software routing](skills/bio-gene-to-reference-tree/references/environment-routing.md) |
 | Inspect artifacts and schemas | [Output contract](skills/bio-gene-to-reference-tree/references/output-contract.md) |
 | Resolve exact NCBI scientific names/TaxIDs | [Taxonomy policy](skills/bio-gene-to-reference-tree/references/taxonomy-resolution.md) |

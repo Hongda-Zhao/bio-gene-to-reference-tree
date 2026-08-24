@@ -1,0 +1,573 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bio-gene-to-reference-tree:plan:0.4",
+  "title": "Gene-to-reference-tree plan 0.4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "request_schema_version", "project_id", "run_id", "state",
+    "created_at", "offline", "mode", "objective", "sequence_context", "molecule_plan",
+    "artifact_plan", "query", "query_resolution", "taxon_scope", "taxonomy_plan", "privacy",
+    "selection_parameters", "reference_discovery", "clustering_plan", "alignment_plan",
+    "trimming_plan", "tree_plan", "annotation_plan", "literature_plan", "input_hashes",
+    "scientific_scope", "selection_summary", "selected_accessions",
+    "rejected_accessions_and_reasons", "outgroup_accessions", "candidate_and_selection_counts",
+    "hard_stops", "approval", "decision_gates", "stages", "planned_commands", "rooting_plan",
+    "warnings", "candidate_semantic_hash", "plan_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.4"},
+    "request_schema_version": {"const": "0.3"},
+    "project_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "state": {"enum": ["pending-clustering", "blocked", "pending-reference-approval"]},
+    "created_at": {"oneOf": [{"type": "null"}, {"type": "string", "format": "date-time"}]},
+    "offline": {"const": true},
+    "mode": {"const": "offline-dry-run"},
+    "objective": {"enum": ["ortholog-tree", "homolog-context", "within-species"]},
+    "sequence_context": {"enum": ["cellular", "viral"]},
+    "molecule_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type", "analysis_kind", "coding_status", "genetic_code", "alignment_strategy",
+        "trimming_strategy", "rna_structure_aware", "source_encoding", "source_alphabet", "analysis_alphabet",
+        "reference_fasta", "translation_fasta", "translation_sequence_sha256", "transformations",
+        "no_alphabet_inference"
+      ],
+      "properties": {
+        "type": {"$ref": "#/$defs/moleculeType"},
+        "analysis_kind": {"$ref": "#/$defs/analysisKind"},
+        "coding_status": {"enum": ["not-applicable", "clean"]},
+        "genetic_code": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/geneticCode"}]},
+        "alignment_strategy": {"$ref": "#/$defs/alignmentStrategy"},
+        "trimming_strategy": {"$ref": "#/$defs/trimmingStrategy"},
+        "rna_structure_aware": {"type": "boolean"},
+        "source_encoding": {"enum": ["not-applicable", "rna-u", "dna-t"]},
+        "source_alphabet": {"enum": ["amino-acid", "DNA-IUPAC", "RNA-IUPAC"]},
+        "analysis_alphabet": {"enum": ["amino-acid", "DNA-IUPAC"]},
+        "reference_fasta": {"type": "string", "minLength": 1},
+        "translation_fasta": {"type": ["string", "null"], "minLength": 1},
+        "translation_sequence_sha256": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[A-Za-z0-9_.:-]+$"},
+          "additionalProperties": {"$ref": "#/$defs/sha256"}
+        },
+        "transformations": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/planTransformation"}
+        },
+        "no_alphabet_inference": {"const": true}
+      }
+    },
+    "artifact_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_fasta", "reference_fasta", "source_rna_fasta", "translation_fasta",
+        "raw_alignment", "backtranslated_alignment", "trimmed_alignment", "tree_input",
+        "unrooted_tree"
+      ],
+      "properties": {
+        "query_fasta": {"$ref": "#/$defs/sourceFastaArtifact"},
+        "reference_fasta": {"$ref": "#/$defs/analysisFastaArtifact"},
+        "source_rna_fasta": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/sourceRnaFastaArtifact"}]
+        },
+        "translation_fasta": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/proteinFastaArtifact"}]
+        },
+        "raw_alignment": {"$ref": "#/$defs/alignmentArtifact"},
+        "backtranslated_alignment": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/codonAlignmentArtifact"}]
+        },
+        "trimmed_alignment": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/alignmentArtifact"}]
+        },
+        "tree_input": {"$ref": "#/$defs/alignmentArtifact"},
+        "unrooted_tree": {"$ref": "#/$defs/treeArtifact"}
+      }
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "original_kind", "original_value", "organism", "taxon_id", "molecule_type",
+        "analysis_kind", "strand", "sequence_region", "length", "sequence_sha256"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]+$"},
+        "original_kind": {"enum": ["protein-fasta", "nucleotide-fasta", "accession", "protein-name", "sequence-name", "gene-symbol"]},
+        "original_value": {"type": "string", "minLength": 1},
+        "organism": {"type": "string", "minLength": 1},
+        "taxon_id": {"type": "string", "pattern": "^[0-9]*$"},
+        "molecule_type": {"$ref": "#/$defs/moleculeType"},
+        "analysis_kind": {"$ref": "#/$defs/analysisKind"},
+        "strand": {"enum": ["", "not-applicable", "plus", "minus"]},
+        "sequence_region": {"type": "string"},
+        "length": {"type": "integer", "minimum": 1},
+        "sequence_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "query_resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source_db", "source_release", "retrieved_at", "gene_name", "protein_name", "feature_name", "live_lookup_performed_by_planner"],
+      "properties": {
+        "status": {"const": "materialized-local-record"},
+        "source_db": {"type": "string"},
+        "source_release": {"type": "string"},
+        "retrieved_at": {"$ref": "#/$defs/dateOrUtcTimestamp"},
+        "gene_name": {"type": "string"},
+        "protein_name": {"type": "string"},
+        "feature_name": {"type": "string"},
+        "live_lookup_performed_by_planner": {"const": false}
+      }
+    },
+    "taxon_scope": {"$ref": "#/$defs/taxonScope"},
+    "taxonomy_plan": {"$ref": "#/$defs/taxonomyPlan"},
+    "privacy": {"$ref": "#/$defs/privacy"},
+    "selection_parameters": {"$ref": "#/$defs/selectionParameters"},
+    "reference_discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "fallback_tiers", "status"],
+      "properties": {
+        "strategy": {"enum": ["ortholog-first", "homolog-first", "local-bundle"]},
+        "fallback_tiers": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "status": {"const": "provided-local-candidate-bundle"}
+      }
+    },
+    "clustering_plan": {"$ref": "#/$defs/clusteringPlan"},
+    "alignment_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "mode", "threads", "strategy", "input_molecule", "alignment_kind", "raw_alignment", "qc_required_before_trimming"],
+      "properties": {
+        "tool": {"const": "mafft"},
+        "mode": {"enum": ["auto", "linsi", "ginsi", "einsi", "qinsi"]},
+        "threads": {"type": "integer", "minimum": 1},
+        "strategy": {"$ref": "#/$defs/alignmentStrategy"},
+        "input_molecule": {"$ref": "#/$defs/moleculeType"},
+        "alignment_kind": {"enum": ["protein", "nucleotide"]},
+        "raw_alignment": {"type": "string", "minLength": 1},
+        "qc_required_before_trimming": {"const": true}
+      }
+    },
+    "trimming_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled", "tool", "primary_profile", "profiles", "min_retained_fraction",
+        "compare_topologies", "strategy", "codon_phase_preserved", "preserve_raw_alignment",
+        "approval_required_before_tree"
+      ],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "tool": {"const": "trimal"},
+        "primary_profile": {"type": "string"},
+        "profiles": {"type": "array", "items": {"$ref": "#/$defs/trimmingProfile"}},
+        "min_retained_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+        "compare_topologies": {"type": "boolean"},
+        "strategy": {"$ref": "#/$defs/trimmingStrategy"},
+        "codon_phase_preserved": {"type": "boolean"},
+        "preserve_raw_alignment": {"const": true},
+        "approval_required_before_tree": {"const": true}
+      }
+    },
+    "tree_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode", "tool", "model", "support_method", "support_replicates", "sh_alrt", "bnni",
+        "threads", "seed", "rooting", "data_kind", "iqtree_sequence_type", "tree_claim",
+        "support_is_repeatability_not_correctness", "preserve_unrooted"
+      ],
+      "properties": {
+        "mode": {"enum": ["fast", "accurate"]},
+        "tool": {"enum": ["fasttree", "iqtree2"]},
+        "model": {"type": "string", "pattern": "^[A-Za-z0-9+._,/-]+$"},
+        "support_method": {"enum": ["sh-like-local", "ultrafast", "standard-bootstrap"]},
+        "support_replicates": {"type": "integer", "minimum": 0},
+        "sh_alrt": {"type": "integer", "minimum": 0},
+        "bnni": {"type": "boolean"},
+        "threads": {"type": "integer", "minimum": 1},
+        "seed": {"type": "integer", "minimum": 1},
+        "rooting": {"enum": ["unrooted", "outgroup"]},
+        "data_kind": {"$ref": "#/$defs/analysisKind"},
+        "iqtree_sequence_type": {"oneOf": [{"enum": ["AA", "DNA"]}, {"type": "string", "pattern": "^CODON(?:[1-9]|[12][0-9]|3[0-3])$"}]},
+        "tree_claim": {"const": "gene-tree"},
+        "support_is_repeatability_not_correctness": {"const": true},
+        "preserve_unrooted": {"const": true}
+      }
+    },
+    "annotation_plan": {"$ref": "#/$defs/annotationPlan"},
+    "literature_plan": {"$ref": "#/$defs/literaturePlan"},
+    "input_hashes": {"type": "object", "minProperties": 3, "additionalProperties": {"$ref": "#/$defs/inputHash"}},
+    "scientific_scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["objective", "claim", "not_a_species_tree"],
+      "properties": {"objective": {"enum": ["ortholog-tree", "homolog-context", "within-species"]}, "claim": {"const": "gene-tree"}, "not_a_species_tree": {"const": true}}
+    },
+    "selection_summary": {"$ref": "#/$defs/selectionSummary"},
+    "selected_accessions": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "rejected_accessions_and_reasons": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["accession", "reason_codes"],
+        "properties": {"accession": {"type": "string", "minLength": 1}, "reason_codes": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}}
+      }
+    },
+    "outgroup_accessions": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "candidate_and_selection_counts": {"$ref": "#/$defs/counts"},
+    "hard_stops": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "approval": {"type": "null"},
+    "decision_gates": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/decisionGate"}},
+    "stages": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"$ref": "#/$defs/planStage"}},
+    "planned_commands": {"type": "array", "items": {"$ref": "#/$defs/plannedCommand"}},
+    "rooting_plan": {"$ref": "#/$defs/rootingPlan"},
+    "warnings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "candidate_semantic_hash": {"$ref": "#/$defs/sha256"},
+    "plan_hash": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "dateOrUtcTimestamp": {
+      "type": "string",
+      "oneOf": [
+        {"format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        {"format": "date-time", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|\\+00:00)$"}
+      ]
+    },
+    "moleculeType": {"enum": ["protein", "noncoding-dna", "noncoding-rna", "coding-dna", "coding-rna"]},
+    "analysisKind": {"enum": ["protein", "nucleotide", "codon"]},
+    "geneticCode": {
+      "enum": [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14, 16, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
+    },
+    "deterministicGeneticCode": {"enum": [1, 11]},
+    "alignmentStrategy": {"enum": ["mafft-protein", "mafft-nucleotide", "translate-mafft-backtranslate"]},
+    "trimmingStrategy": {"enum": ["none", "trimal-columns", "protein-mask-to-codons"]},
+    "planTransformation": {
+      "type": "object", "additionalProperties": false, "required": ["operation", "from", "to", "status"],
+      "properties": {
+        "operation": {"enum": ["normalize-u-to-t-derived-copy", "copy-t-encoded-rna-to-analysis-fasta", "use-validated-translations", "protein-mask-backtranslation"]},
+        "from": {"enum": ["coding-rna", "noncoding-rna", "coding-dna", "noncoding-dna", "protein", "protein-alignment"]},
+        "to": {"enum": ["coding-dna", "noncoding-dna", "protein", "codon-alignment"]},
+        "status": {"enum": ["materialized-by-planner", "materialized-input", "planned"]}
+      }
+    },
+    "sourceFastaArtifact": {
+      "type": "object", "additionalProperties": false, "required": ["path", "artifact_type", "data_kind"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "fasta"}, "data_kind": {"$ref": "#/$defs/moleculeType"}}
+    },
+    "analysisFastaArtifact": {
+      "type": "object", "additionalProperties": false, "required": ["path", "artifact_type", "data_kind"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "fasta"}, "data_kind": {"enum": ["protein", "nucleotide"]}}
+    },
+    "sourceRnaFastaArtifact": {
+      "type": "object", "additionalProperties": false, "required": ["path", "artifact_type", "data_kind"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "fasta"}, "data_kind": {"enum": ["coding-rna", "noncoding-rna"]}}
+    },
+    "proteinFastaArtifact": {
+      "type": "object", "additionalProperties": false, "required": ["path", "artifact_type", "data_kind"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "fasta"}, "data_kind": {"const": "protein"}}
+    },
+    "alignmentArtifact": {
+      "type": "object", "additionalProperties": false, "required": ["path", "artifact_type", "data_kind"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "alignment"}, "data_kind": {"$ref": "#/$defs/analysisKind"}}
+    },
+    "codonAlignmentArtifact": {
+      "type": "object", "additionalProperties": false, "required": ["path", "artifact_type", "data_kind"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "alignment"}, "data_kind": {"const": "codon"}}
+    },
+    "treeArtifact": {
+      "type": "object", "additionalProperties": false, "required": ["path", "artifact_type", "inferred_from"],
+      "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "tree"}, "inferred_from": {"$ref": "#/$defs/analysisKind"}}
+    },
+    "taxonScope": {
+      "type": "object", "additionalProperties": false, "required": ["ingroup", "outgroup"],
+      "properties": {"ingroup": {"type": "string", "minLength": 1}, "outgroup": {"type": "string"}}
+    },
+    "privacy": {
+      "type": "object", "additionalProperties": false, "required": ["remote_search_allowed", "unpublished_sequence"],
+      "properties": {"remote_search_allowed": {"type": "boolean"}, "unpublished_sequence": {"type": "boolean"}}
+    },
+    "taxonomyPlan": {
+      "type": "object", "additionalProperties": false, "required": ["enabled", "status", "source", "match_mode"],
+      "properties": {
+        "enabled": {"type": "boolean"}, "status": {"enum": ["not-requested", "validated"]},
+        "source": {"const": "ncbi-taxdump"}, "match_mode": {"const": "exact-scientific-name"},
+        "snapshot": {"type": "string", "minLength": 1}, "source_url": {"type": "string", "minLength": 1},
+        "retrieved_at": {"type": "string", "minLength": 1}, "names_sha256": {"$ref": "#/$defs/sha256"},
+        "nodes_sha256": {"$ref": "#/$defs/sha256"}, "records_validated": {"type": "integer", "minimum": 1},
+        "resolver_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "resolution_artifact": {"const": "taxonomy_resolution.tsv"}
+      },
+      "allOf": [{
+        "if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]},
+        "then": {"properties": {"status": {"const": "validated"}}, "required": ["snapshot", "source_url", "retrieved_at", "names_sha256", "nodes_sha256", "records_validated", "resolver_version", "resolution_artifact"]},
+        "else": {"properties": {"status": {"const": "not-requested"}}}
+      }]
+    },
+    "selectionParameters": {
+      "type": "object", "additionalProperties": false,
+      "required": ["min_query_coverage", "min_target_coverage", "min_length_ratio", "max_length_ratio", "max_per_taxon", "max_references", "min_ingroup_taxa", "require_outgroup", "outgroup_count", "allow_paralogs"],
+      "properties": {
+        "min_query_coverage": {"type": "number", "minimum": 0, "maximum": 1}, "min_target_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "min_length_ratio": {"type": "number", "minimum": 0}, "max_length_ratio": {"type": "number", "minimum": 0},
+        "max_per_taxon": {"type": "integer", "minimum": 1}, "max_references": {"type": "integer", "minimum": 1},
+        "min_ingroup_taxa": {"type": "integer", "minimum": 1}, "require_outgroup": {"type": "boolean"},
+        "outgroup_count": {"type": "integer", "minimum": 0}, "allow_paralogs": {"type": "boolean"}
+      }
+    },
+    "clusteringPlan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mode", "tool", "trigger_min_sequences", "algorithm", "min_seq_id", "coverage", "coverage_mode", "threads", "preserve_analysis_groups", "expanded_candidate_count", "triggered", "cluster_ids_complete", "status", "protected_analysis_groups", "sequence_molecule", "command", "replan_required_after_execution"],
+      "properties": {
+        "mode": {"enum": ["off", "auto", "precomputed"]}, "tool": {"const": "mmseqs2"},
+        "trigger_min_sequences": {"type": "integer", "minimum": 2}, "algorithm": {"enum": ["easy-linclust", "easy-cluster"]},
+        "min_seq_id": {"type": "number", "minimum": 0, "maximum": 1}, "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+        "coverage_mode": {"type": "integer", "minimum": 0, "maximum": 5}, "threads": {"type": "integer", "minimum": 1},
+        "preserve_analysis_groups": {"$ref": "#/$defs/analysisGroups"}, "expanded_candidate_count": {"type": "integer", "minimum": 0},
+        "triggered": {"type": "boolean"}, "cluster_ids_complete": {"type": "boolean"},
+        "status": {"enum": ["disabled", "not-needed", "precomputed", "pending-upstream"]},
+        "protected_analysis_groups": {"$ref": "#/$defs/analysisGroups"}, "sequence_molecule": {"$ref": "#/$defs/moleculeType"},
+        "command": {"$ref": "#/$defs/plannedCommand"}, "replan_required_after_execution": {"type": "boolean"}
+      }
+    },
+    "analysisGroups": {"type": "array", "uniqueItems": true, "items": {"enum": ["study", "outgroup"]}},
+    "trimmingProfile": {
+      "type": "object", "additionalProperties": false, "required": ["id", "gap_threshold"],
+      "properties": {"id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"}, "gap_threshold": {"type": "number", "minimum": 0, "maximum": 1}}
+    },
+    "annotationPlan": {
+      "type": "object", "additionalProperties": false, "required": ["itol_colorstrip", "local_ggtree_renderer", "colors", "range_dataset", "sequence_metadata"],
+      "properties": {
+        "itol_colorstrip": {"type": ["string", "null"]},
+        "local_ggtree_renderer": {
+          "type": "object", "additionalProperties": false, "required": ["script", "engine", "status", "joins", "default_outputs", "reroots_tree"],
+          "properties": {"script": {"type": "string", "minLength": 1}, "engine": {"const": "ggtree+ggplot2"}, "status": {"const": "post-tree-local"}, "joins": {"const": "exact tip_id equality"}, "default_outputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}, "reroots_tree": {"const": false}}
+        },
+        "colors": {
+          "type": "object", "additionalProperties": false, "required": ["study", "expanded", "outgroup"],
+          "properties": {"study": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}, "expanded": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}, "outgroup": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}}
+        },
+        "range_dataset": {"type": "string", "minLength": 1}, "sequence_metadata": {"type": "string", "minLength": 1}
+      }
+    },
+    "literaturePlan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["enabled", "years_back", "include_foundational", "taxon_fallback_ranks", "sources", "status", "exact_taxon_then_escalate", "gene_tree_species_tree_comparison"],
+      "properties": {
+        "enabled": {"type": "boolean"}, "years_back": {"type": "integer", "minimum": 1}, "include_foundational": {"type": "boolean"},
+        "taxon_fallback_ranks": {"type": "array", "items": {"type": "string", "minLength": 1}}, "sources": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "status": {"enum": ["pending-live-evidence-search", "disabled"]}, "exact_taxon_then_escalate": {"const": true},
+        "gene_tree_species_tree_comparison": {"type": "string", "minLength": 1}
+      }
+    },
+    "inputHash": {
+      "type": "object", "additionalProperties": false, "required": ["logical_path", "sha256"],
+      "properties": {"logical_path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "selectionSummary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["query_id", "query_length", "selected_accessions", "selected_ingroup_taxa", "selected_outgroups", "selected_study_sequences", "unsampled_candidate_ingroup_clades", "rejected_count", "blockers"],
+      "properties": {
+        "query_id": {"type": "string", "minLength": 1}, "query_length": {"type": "integer", "minimum": 1},
+        "selected_accessions": {"type": "array", "items": {"type": "string", "minLength": 1}}, "selected_ingroup_taxa": {"type": "integer", "minimum": 0},
+        "selected_outgroups": {"type": "array", "items": {"type": "string", "minLength": 1}}, "selected_study_sequences": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "unsampled_candidate_ingroup_clades": {"type": "array", "items": {"type": "string", "minLength": 1}}, "rejected_count": {"type": "integer", "minimum": 0},
+        "blockers": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidate_records_including_query", "selected_records_including_query", "selected_references_excluding_query", "selected_references_excluding_study", "rejected_records"],
+      "properties": {"candidate_records_including_query": {"type": "integer", "minimum": 0}, "selected_records_including_query": {"type": "integer", "minimum": 0}, "selected_references_excluding_query": {"type": "integer", "minimum": 0}, "selected_references_excluding_study": {"type": "integer", "minimum": 0}, "rejected_records": {"type": "integer", "minimum": 0}}
+    },
+    "decisionGate": {
+      "type": "object", "additionalProperties": false, "required": ["id", "status", "requires"],
+      "properties": {"id": {"type": "string", "minLength": 1}, "status": {"enum": ["blocked", "pending", "not-reached"]}, "requires": {"type": "array", "items": {"type": "string", "minLength": 1}}}
+    },
+    "planStage": {
+      "type": "object", "additionalProperties": false, "required": ["id", "status"],
+      "properties": {
+        "id": {"enum": ["intake", "resolve-query", "discover-candidates", "cluster-candidates", "select-references", "align-and-qc", "trim-and-qc", "infer-tree", "root-and-annotate", "literature-context"]},
+        "status": {"enum": ["completed", "disabled", "not-needed", "pending-upstream", "precomputed", "blocked", "planned", "pending", "skipped"]},
+        "method": {"type": "string", "minLength": 1}, "protected": {"$ref": "#/$defs/analysisGroups"}, "tree_state": {"const": "unrooted"}
+      }
+    },
+    "plannedCommand": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "stage", "tool", "argv", "inputs", "outputs", "status", "executed"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "stage": {"type": "string", "minLength": 1}, "tool": {"type": "string", "minLength": 1},
+        "argv": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}, "inputs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "outputs": {"type": "array", "items": {"type": "string", "minLength": 1}}, "status": {"enum": ["planned", "blocked", "skipped"]},
+        "executed": {"const": false}, "stdout": {"type": ["string", "null"]}, "sequence_type": {"enum": ["amino-acid", "nucleotide"]},
+        "threshold_semantics": {"type": "string", "minLength": 1}, "support_semantics": {"type": "string", "minLength": 1},
+        "transformation": {"const": "protein-alignment-mask-to-codon-triplets"}, "genetic_code": {"$ref": "#/$defs/geneticCode"},
+        "warning_policy": {"type": "string", "minLength": 1}
+      }
+    },
+    "rootingPlan": {
+      "type": "object", "additionalProperties": false, "required": ["method", "outgroup_accessions", "preserve_unrooted", "executed"],
+      "properties": {"method": {"enum": ["unrooted", "outgroup"]}, "outgroup_accessions": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}, "preserve_unrooted": {"const": true}, "executed": {"const": false}}
+    },
+    "proteinSourceFastaArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "fasta"}, "data_kind": {"const": "protein"}}},
+    "noncodingSourceFastaArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "fasta"}, "data_kind": {"enum": ["noncoding-dna", "noncoding-rna"]}}},
+    "codingSourceFastaArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "fasta"}, "data_kind": {"enum": ["coding-dna", "coding-rna"]}}},
+    "nucleotideFastaArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "fasta"}, "data_kind": {"const": "nucleotide"}}},
+    "noncodingRnaFastaArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "fasta"}, "data_kind": {"const": "noncoding-rna"}}},
+    "codingRnaFastaArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "fasta"}, "data_kind": {"const": "coding-rna"}}},
+    "proteinAlignmentArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "alignment"}, "data_kind": {"const": "protein"}}},
+    "nucleotideAlignmentArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "alignment"}, "data_kind": {"const": "nucleotide"}}},
+    "proteinTreeArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "tree"}, "inferred_from": {"const": "protein"}}},
+    "nucleotideTreeArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "tree"}, "inferred_from": {"const": "nucleotide"}}},
+    "codonTreeArtifact": {"type": "object", "additionalProperties": false, "properties": {"path": {"type": "string", "minLength": 1}, "artifact_type": {"const": "tree"}, "inferred_from": {"const": "codon"}}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"molecule_plan": {"properties": {"type": {"const": "protein"}}, "required": ["type"]}}},
+      "then": {"properties": {
+        "molecule_plan": {"properties": {"analysis_kind": {"const": "protein"}, "coding_status": {"const": "not-applicable"}, "genetic_code": {"type": "null"}, "alignment_strategy": {"const": "mafft-protein"}, "trimming_strategy": {"enum": ["none", "trimal-columns"]}, "rna_structure_aware": {"const": false}, "source_encoding": {"const": "not-applicable"}, "source_alphabet": {"const": "amino-acid"}, "analysis_alphabet": {"const": "amino-acid"}, "translation_fasta": {"type": "null"}, "translation_sequence_sha256": {"maxProperties": 0}, "transformations": {"maxItems": 0}}},
+        "query": {"properties": {"molecule_type": {"const": "protein"}, "analysis_kind": {"const": "protein"}, "strand": {"enum": ["", "not-applicable"]}}},
+        "artifact_plan": {"properties": {"query_fasta": {"$ref": "#/$defs/proteinSourceFastaArtifact"}, "reference_fasta": {"$ref": "#/$defs/proteinFastaArtifact"}, "source_rna_fasta": {"type": "null"}, "translation_fasta": {"type": "null"}, "raw_alignment": {"$ref": "#/$defs/proteinAlignmentArtifact"}, "backtranslated_alignment": {"type": "null"}, "tree_input": {"$ref": "#/$defs/proteinAlignmentArtifact"}, "unrooted_tree": {"$ref": "#/$defs/proteinTreeArtifact"}}},
+        "alignment_plan": {"properties": {"strategy": {"const": "mafft-protein"}, "input_molecule": {"const": "protein"}, "alignment_kind": {"const": "protein"}}},
+        "trimming_plan": {"properties": {"strategy": {"enum": ["none", "trimal-columns"]}, "codon_phase_preserved": {"const": false}}},
+        "tree_plan": {"properties": {"data_kind": {"const": "protein"}, "iqtree_sequence_type": {"const": "AA"}}}
+      }}
+    },
+    {
+      "if": {"properties": {"molecule_plan": {"properties": {"type": {"enum": ["noncoding-dna", "noncoding-rna"]}}, "required": ["type"]}}},
+      "then": {"properties": {
+        "molecule_plan": {"properties": {"analysis_kind": {"const": "nucleotide"}, "coding_status": {"const": "not-applicable"}, "genetic_code": {"type": "null"}, "alignment_strategy": {"const": "mafft-nucleotide"}, "trimming_strategy": {"enum": ["none", "trimal-columns"]}, "analysis_alphabet": {"const": "DNA-IUPAC"}, "translation_fasta": {"type": "null"}, "translation_sequence_sha256": {"maxProperties": 0}}},
+        "query": {"properties": {"molecule_type": {"enum": ["noncoding-dna", "noncoding-rna"]}, "analysis_kind": {"const": "nucleotide"}, "strand": {"enum": ["plus", "minus"]}}},
+        "artifact_plan": {"properties": {"query_fasta": {"$ref": "#/$defs/noncodingSourceFastaArtifact"}, "reference_fasta": {"$ref": "#/$defs/nucleotideFastaArtifact"}, "translation_fasta": {"type": "null"}, "raw_alignment": {"$ref": "#/$defs/nucleotideAlignmentArtifact"}, "backtranslated_alignment": {"type": "null"}, "tree_input": {"$ref": "#/$defs/nucleotideAlignmentArtifact"}, "unrooted_tree": {"$ref": "#/$defs/nucleotideTreeArtifact"}}},
+        "alignment_plan": {"properties": {"strategy": {"const": "mafft-nucleotide"}, "input_molecule": {"enum": ["noncoding-dna", "noncoding-rna"]}, "alignment_kind": {"const": "nucleotide"}}},
+        "trimming_plan": {"properties": {"strategy": {"enum": ["none", "trimal-columns"]}, "codon_phase_preserved": {"const": false}}},
+        "tree_plan": {"properties": {"data_kind": {"const": "nucleotide"}, "iqtree_sequence_type": {"const": "DNA"}}}
+      }}
+    },
+    {
+      "if": {"properties": {"molecule_plan": {"properties": {"type": {"const": "noncoding-dna"}}, "required": ["type"]}}},
+      "then": {"properties": {"molecule_plan": {"properties": {"rna_structure_aware": {"const": false}, "source_encoding": {"const": "not-applicable"}, "source_alphabet": {"const": "DNA-IUPAC"}, "transformations": {"maxItems": 0}}}, "artifact_plan": {"properties": {"source_rna_fasta": {"type": "null"}}}}}
+    },
+    {
+      "if": {"properties": {"molecule_plan": {"properties": {"type": {"const": "noncoding-rna"}}, "required": ["type"]}}},
+      "then": {"properties": {
+        "molecule_plan": {"properties": {"source_encoding": {"enum": ["rna-u", "dna-t"]}}},
+        "artifact_plan": {"properties": {"source_rna_fasta": {"$ref": "#/$defs/noncodingRnaFastaArtifact"}}}
+      }}
+    },
+    {
+      "if": {"properties": {"molecule_plan": {"properties": {"type": {"enum": ["coding-dna", "coding-rna"]}}, "required": ["type"]}}},
+      "then": {"properties": {
+        "molecule_plan": {"properties": {"analysis_kind": {"enum": ["nucleotide", "codon"]}, "coding_status": {"const": "clean"}, "genetic_code": {"$ref": "#/$defs/deterministicGeneticCode"}, "alignment_strategy": {"const": "translate-mafft-backtranslate"}, "trimming_strategy": {"enum": ["none", "protein-mask-to-codons"]}, "rna_structure_aware": {"const": false}, "analysis_alphabet": {"const": "DNA-IUPAC"}, "translation_fasta": {"type": "string", "minLength": 1}, "translation_sequence_sha256": {"minProperties": 1}, "transformations": {"allOf": [{"contains": {"properties": {"operation": {"const": "use-validated-translations"}}, "required": ["operation"]}, "minContains": 1, "maxContains": 1}, {"contains": {"properties": {"operation": {"const": "protein-mask-backtranslation"}}, "required": ["operation"]}, "minContains": 1, "maxContains": 1}]}}},
+        "query": {"properties": {"molecule_type": {"enum": ["coding-dna", "coding-rna"]}, "analysis_kind": {"enum": ["nucleotide", "codon"]}, "strand": {"enum": ["plus", "minus"]}}},
+        "artifact_plan": {"properties": {"query_fasta": {"$ref": "#/$defs/codingSourceFastaArtifact"}, "reference_fasta": {"$ref": "#/$defs/nucleotideFastaArtifact"}, "translation_fasta": {"$ref": "#/$defs/proteinFastaArtifact"}, "raw_alignment": {"$ref": "#/$defs/proteinAlignmentArtifact"}, "backtranslated_alignment": {"$ref": "#/$defs/codonAlignmentArtifact"}, "tree_input": {"$ref": "#/$defs/codonAlignmentArtifact"}}},
+        "alignment_plan": {"properties": {"strategy": {"const": "translate-mafft-backtranslate"}, "input_molecule": {"enum": ["coding-dna", "coding-rna"]}, "alignment_kind": {"const": "protein"}}},
+        "trimming_plan": {"properties": {"strategy": {"enum": ["none", "protein-mask-to-codons"]}, "codon_phase_preserved": {"const": true}}}
+      }}
+    },
+    {
+      "if": {"properties": {"molecule_plan": {"properties": {"type": {"const": "coding-dna"}}, "required": ["type"]}}},
+      "then": {"properties": {
+        "molecule_plan": {"properties": {"source_encoding": {"const": "not-applicable"}, "source_alphabet": {"const": "DNA-IUPAC"}, "transformations": {"not": {"contains": {"properties": {"operation": {"enum": ["normalize-u-to-t-derived-copy", "copy-t-encoded-rna-to-analysis-fasta"]}}, "required": ["operation"]}}}}},
+        "artifact_plan": {"properties": {"source_rna_fasta": {"type": "null"}}}
+      }}
+    },
+    {
+      "if": {"properties": {"molecule_plan": {"properties": {"type": {"const": "coding-rna"}}, "required": ["type"]}}},
+      "then": {"properties": {
+        "molecule_plan": {"properties": {"source_encoding": {"enum": ["rna-u", "dna-t"]}}},
+        "artifact_plan": {"properties": {"source_rna_fasta": {"$ref": "#/$defs/codingRnaFastaArtifact"}}}
+      }}
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule_plan": {
+            "properties": {
+              "type": {"enum": ["noncoding-rna", "coding-rna"]},
+              "source_encoding": {"const": "rna-u"}
+            },
+            "required": ["type", "source_encoding"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "molecule_plan": {
+            "properties": {
+              "source_alphabet": {"const": "RNA-IUPAC"},
+              "transformations": {
+                "contains": {
+                  "properties": {"operation": {"const": "normalize-u-to-t-derived-copy"}},
+                  "required": ["operation"]
+                },
+                "minContains": 1,
+                "maxContains": 1,
+                "not": {
+                  "contains": {
+                    "properties": {"operation": {"const": "copy-t-encoded-rna-to-analysis-fasta"}},
+                    "required": ["operation"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "molecule_plan": {
+            "properties": {
+              "type": {"enum": ["noncoding-rna", "coding-rna"]},
+              "source_encoding": {"const": "dna-t"}
+            },
+            "required": ["type", "source_encoding"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "molecule_plan": {
+            "properties": {
+              "source_alphabet": {"const": "DNA-IUPAC"},
+              "transformations": {
+                "contains": {
+                  "properties": {"operation": {"const": "copy-t-encoded-rna-to-analysis-fasta"}},
+                  "required": ["operation"]
+                },
+                "minContains": 1,
+                "maxContains": 1,
+                "not": {
+                  "contains": {
+                    "properties": {"operation": {"const": "normalize-u-to-t-derived-copy"}},
+                    "required": ["operation"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"molecule_plan": {"properties": {"analysis_kind": {"const": "nucleotide"}}, "required": ["analysis_kind"]}}},
+      "then": {"properties": {"tree_plan": {"properties": {"data_kind": {"const": "nucleotide"}, "iqtree_sequence_type": {"const": "DNA"}}}, "artifact_plan": {"properties": {"unrooted_tree": {"$ref": "#/$defs/nucleotideTreeArtifact"}}}}}
+    },
+    {
+      "if": {"properties": {"molecule_plan": {"properties": {"analysis_kind": {"const": "codon"}}, "required": ["analysis_kind"]}}},
+      "then": {"properties": {"tree_plan": {"properties": {"mode": {"const": "accurate"}, "tool": {"const": "iqtree2"}, "data_kind": {"const": "codon"}, "iqtree_sequence_type": {"type": "string", "pattern": "^CODON(?:[1-9]|[12][0-9]|3[0-3])$"}}}, "artifact_plan": {"properties": {"unrooted_tree": {"$ref": "#/$defs/codonTreeArtifact"}}}}}
+    },
+    {
+      "if": {"properties": {"molecule_plan": {"properties": {"trimming_strategy": {"const": "none"}}, "required": ["trimming_strategy"]}}},
+      "then": {"properties": {"artifact_plan": {"properties": {"trimmed_alignment": {"type": "null"}}}, "trimming_plan": {"properties": {"enabled": {"const": false}, "strategy": {"const": "none"}, "primary_profile": {"const": ""}, "profiles": {"maxItems": 0}}}}},
+      "else": {"properties": {"artifact_plan": {"properties": {"trimmed_alignment": {"$ref": "#/$defs/alignmentArtifact"}}}, "trimming_plan": {"properties": {"enabled": {"const": true}}}}}
+    }
+  ]
+}

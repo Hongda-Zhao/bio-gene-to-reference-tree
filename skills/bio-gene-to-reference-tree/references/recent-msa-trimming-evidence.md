@@ -2,6 +2,8 @@
 
 Use this reference when recent literature is being used to choose, challenge, or justify an alignment and post-alignment filtering strategy. The machine-readable companion is [recent-msa-trimming-evidence.tsv](recent-msa-trimming-evidence.tsv).
 
+Literature does not choose molecule type. First apply [sequence-type-routing.md](sequence-type-routing.md): legacy requests remain protein-only, while request 0.3 explicitly separates protein, noncoding DNA/RNA, and clean CDS with an approved nucleotide-site or codon analysis. A paper using another analysis space is not permission to fall back into it.
+
 ## Scope and provenance
 
 This is a curated snapshot of 59 analysis workflows from 45 primary evolutionary or methods papers published from 2023-08-24 through 2026-08-24 and checked on 2026-08-24. Searches routed through Europe PMC, PubMed, PubMed Central, and official publisher pages using combinations of phylogenomics, gene-family evolution, MAFFT, multiple sequence alignment, trimAl, ClipKIT, BMGE, Gblocks, and alignment filtering. Methods were verified against accessible full text rather than inferred from abstracts.
@@ -51,10 +53,11 @@ Manual masking or terminal cleanup is recorded as the trimming method and receiv
 
 ## What the evidence supports
 
-- Classify the alignment architecture before selecting a precedent. A conventional protein MSA, protein-guided codon alignment, target-capture or concatenated locus matrix, and reference-mapped SNP pseudoalignment are not interchangeable. The pseudoalignment row is a routing boundary, not permission to apply a genome pipeline inside this protein-gene-tree Skill.
+- Classify the alignment architecture before selecting a precedent. A conventional protein MSA, direct noncoding nucleotide MSA, protein-guided codon alignment, target-capture or concatenated locus matrix, and reference-mapped SNP pseudoalignment are not interchangeable. The pseudoalignment row is a routing boundary, not permission to apply a genome pipeline inside this single-gene-tree Skill.
 - Very large curated protein families can use a stable template plus MAFFT `--add`; preserve the template and inspect every addition.
-- For coding-gene analyses, align proteins and back-translate. If filtering is needed, trim the protein MSA before back-translation or prove that nucleotide-column removal preserves complete triplets; the cataloged NPC2 workflow reports direct trimAl filtering after PAL2NAL without documenting triplet preservation and is a caution, not a default.
-- Conserved nucleotide loci and rDNA may still need Gblocks, explicit manual endpoint cleanup, or removal of genuinely unalignable ITS regions.
+- For clean coding-gene analyses, verify frame/code/translation, align proteins with explicit MAFFT `--amino`, and use trimAl `-backtrans <matched-CDS.fna>` so filtering decisions are projected as complete codons. This deterministic trimAl route is limited to NCBI codes 1/11; other codes need a reviewed MACSE/PAL2NAL/precomputed handoff. Preserve both protein and codon outputs and re-check translation equality. The cataloged NPC2 workflow reports direct trimAl filtering after PAL2NAL without documenting triplet preservation and is a caution, not a default.
+- Conserved noncoding nucleotide loci and rDNA use explicit MAFFT `--nuc` and may still need Gblocks, explicit manual endpoint cleanup, or removal of genuinely unalignable ITS regions. Require comparable locus boundaries and orientation; RNA needs declared `rna-u`/`dna-t` source encoding and source/analysis-copy provenance. Requested Q-INS-i uses the dedicated `mafft-qinsi` executable.
+- Frameshifted, disrupted, internal-stop-containing, pseudogene, or uncertain-frame CDS requires reviewed MACSE handling. A documented terminal stop in an otherwise clean, translation-validated CDS is not an internal stop. Disrupted CDS must not be silently aligned as direct nucleotide or promoted into the clean codon route; only a reviewed/exported, typed precomputed codon alignment may be re-profiled for inference.
 - Deep protein phylogenomics commonly uses L-INS-i or E-INS-i with trimAl `gappyout`, ClipKIT, BMGE, or several competing filters; mixture-model and outgroup sensitivity remain separate requirements.
 - Large phylogenomic matrices also need locus completeness, composition, homology, saturation, and long-branch checks. Column trimming cannot substitute for those checks.
 - Viral workflows range from explicit no-trim placement of short RdRp fragments to E-INS-i plus gap filtering for divergent giant-virus proteins. Gene or segment definition and recombination screening must decide the route.
@@ -63,11 +66,11 @@ Manual masking or terminal cleanup is recorded as the trimming method and receiv
 - Recent high-impact papers still omit point versions, modes, thresholds, or support replicate counts. Journal prestige and recency do not convert `partial` into `exact`; never reconstruct missing commands from cited software papers or current defaults.
 - For a single-gene tree, filtering should be no stronger than the biological and alignment evidence justify. Retain the raw alignment and include an untrimmed or gentler-filter control when a conclusion changes with column removal.
 
-These are empirical precedents, not defaults. Select a row only after matching molecule type, sequence architecture, conservation class and scope, dataset size, taxonomic depth, missing-data pattern, and analysis objective. Do not choose a method because the focal organism shares only the row's broad taxon label.
+These are empirical precedents, not defaults. Select a row only after exactly matching molecule type and analysis architecture, then comparing conservation class and scope, dataset size, homologous region, taxonomic depth, missing-data pattern, and analysis objective. Do not choose a method because the focal organism shares only the row's broad taxon label.
 
 ## Agent use
 
-1. State the focal dataset's provisional `conservation_class`, `conservation_scope`, and `conservation_basis` in the hash-bound conservation assessment, then filter the TSV by those fields together with `molecule_type`, `gene_or_markers`, `dataset_scale`, and `taxon_scope`; use `broad_group` only as a secondary cue.
+1. State the exact request molecule/analysis space and the focal dataset's provisional `conservation_class`, `conservation_scope`, and `conservation_basis` in the hash-bound assessment. Filter the TSV first by compatible `molecule_type`/architecture, then by `gene_or_markers`, class/scope, region, scale, and `taxon_scope`; use `broad_group` only as a secondary cue.
 2. Prefer rows with `exact` reporting, but retain directly relevant `partial` rows as limitations rather than filling missing parameters.
 3. Retrieve the source again before treating a row as decisive. Record the retrieval date and whether the current article or correction differs from this snapshot.
 4. Propose at least one biologically justified primary alignment and one reasonable sensitivity analysis when the evidence is method-sensitive.
@@ -75,6 +78,8 @@ These are empirical precedents, not defaults. Select a row only after matching m
 6. Cite the paper that informed the decision and explain why its data architecture is comparable to the current dataset.
 
 If `molecule_type` contains `pseudoalignment`, stop this Skill's alignment route. A reference-mapped SNP pseudoalignment needs its own reference, callable-core, repeat/recombination-mask, invariant-site, and ascertainment records; it must not be passed through MAFFT or trimAl as though it were a protein-family MSA.
+
+When the catalog lacks a comparable route, follow the primary [MAFFT](https://mafft.cbrc.jp/alignment/software/manual/manual.html), [trimAl](https://trimal.readthedocs.io/en/latest/usage.html), [IQ-TREE](https://iqtree.github.io/doc/Command-Reference), and [FastTree](https://morgannprice.github.io/fasttree/) documentation. Do not import a protein threshold/model into DNA or codon analysis, or use FastTree nucleotide mode as a codon model.
 
 Do not let the catalog bypass the reference-approval or alignment/trimming-approval gates. If no row is genuinely comparable, follow primary tool documentation and say that recent empirical precedent was not identified.
 

@@ -1,21 +1,27 @@
 {
-  "schema_version": "0.1",
+  "schema_version": "0.2",
   "profile_id": "hybrid-agent-hpc-example",
   "intent": "auto",
   "inputs": {
     "query_kind": "accession-or-name",
+    "query_molecule": "protein",
     "query_resolved": false,
     "query_location": "absent",
     "candidates_location": "absent",
+    "candidates_molecule": "absent",
+    "candidate_bundle_kind": "absent",
     "cluster_mapping_location": "absent",
     "alignment_location": "absent",
+    "alignment_kind": "absent",
     "tree_location": "absent",
+    "tree_data_kind": "absent",
     "tree_root_state": "none",
     "metadata_location": "absent",
     "candidate_count": null,
     "taxdump_location": "absent",
     "sequence_database_location": "absent",
     "sequence_database_format": "none",
+    "sequence_database_molecule": "none",
     "cached_literature": false
   },
   "capabilities": {
@@ -47,6 +53,12 @@
     "visualization": "either",
     "current_literature": true,
     "report": true,
-    "clustering_trigger": 200
+    "clustering_trigger": 200,
+    "analysis_kind": "protein",
+    "genetic_code": null,
+    "coding_status": "not-applicable",
+    "alignment_strategy": "auto",
+    "trimming_strategy": "trimal-columns",
+    "rna_structure_aware": false
   }
 }
