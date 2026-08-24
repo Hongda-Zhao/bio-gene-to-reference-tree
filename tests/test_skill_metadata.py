@@ -43,6 +43,8 @@ class SkillPackageTests(unittest.TestCase):
         self.assertGreater(len(description), 0)
         self.assertLessEqual(len(description), 1024)
         self.assertNotRegex(description, r"[<>]")
+        self.assertIn("gene-family conservation", description)
+        self.assertIn("explicit taxonomic scope", description)
 
     def test_progressive_disclosure_and_local_links(self) -> None:
         skill_document = SKILL_ROOT / "SKILL.md"
@@ -87,6 +89,7 @@ class SkillPackageTests(unittest.TestCase):
             "assets/query.example.faa",
             "assets/candidates.example.faa",
             "assets/candidates.example.tsv",
+            "assets/conservation-assessment.example.tsv",
             "references/workflow.md",
             "references/reference-selection.md",
             "references/output-contract.md",
@@ -106,6 +109,31 @@ class SkillPackageTests(unittest.TestCase):
         }
         missing = sorted(path for path in expected if not (SKILL_ROOT / path).is_file())
         self.assertEqual(missing, [])
+
+    def test_conservation_assessment_template_is_real_tsv(self) -> None:
+        template = SKILL_ROOT / "assets" / "conservation-assessment.example.tsv"
+        raw = template.read_text(encoding="utf-8")
+        self.assertTrue(raw.endswith("\n"))
+        self.assertNotIn("\r", raw)
+        rows = list(csv.DictReader(raw.splitlines(), delimiter="\t"))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(
+            set(rows[0]),
+            {
+                "analysis_unit",
+                "conservation_class",
+                "conservation_scope",
+                "conservation_basis",
+                "evidence_ids",
+                "assessment_status",
+                "limitations",
+            },
+        )
+        row = rows[0]
+        self.assertEqual(row["conservation_class"], "broadly-conserved-gene-family")
+        self.assertEqual(row["assessment_status"], "provisional")
+        self.assertIn("Template only", row["limitations"])
+        self.assertIn("NP_009225.1", row["evidence_ids"])
 
     def test_recent_msa_trimming_evidence_catalog_is_auditable(self) -> None:
         catalog = SKILL_ROOT / "references" / "recent-msa-trimming-evidence.tsv"
@@ -309,6 +337,8 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn('display_name: "Gene-to-Reference Tree"', content)
         self.assertRegex(content, r'short_description: "[^"\n]{25,64}"')
         self.assertIn("$bio-gene-to-reference-tree", content)
+        self.assertIn("conservation", content)
+        self.assertIn("explicit taxonomic scope", content)
 
     def test_conservation_assessment_is_a_hash_bound_review_artifact(self) -> None:
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
@@ -329,6 +359,19 @@ class SkillPackageTests(unittest.TestCase):
             self.assertIn(field, contract)
         self.assertIn("SHA-256", contract)
         self.assertIn("reopen", contract)
+        expected_header = "\t".join(
+            (
+                "analysis_unit",
+                "conservation_class",
+                "conservation_scope",
+                "conservation_basis",
+                "evidence_ids",
+                "assessment_status",
+                "limitations",
+            )
+        )
+        self.assertIn(expected_header, contract)
+        self.assertNotIn("analysis_unit, conservation_class", contract)
 
     def test_v03_workflow_and_v02_schema_surfaces_are_synchronized(self) -> None:
         script = (SKILL_ROOT / "scripts" / "gene_to_tree.py").read_text(encoding="utf-8")
@@ -359,6 +402,11 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn("actions/workflows/validate.yml/badge.svg", readme)
         self.assertIn("npx skills add Hongda-Zhao/bio-gene-to-reference-tree", readme)
         self.assertIn("https://agentskills.io/specification", readme)
+        self.assertIn("--agent codex", readme)
+        self.assertIn("--agent claude-code", readme)
+        self.assertIn("$bio-gene-to-reference-tree", readme)
+        self.assertIn("/bio-gene-to-reference-tree", readme)
+        self.assertIn("no forked Claude-specific prompt is required", readme)
 
 
 if __name__ == "__main__":

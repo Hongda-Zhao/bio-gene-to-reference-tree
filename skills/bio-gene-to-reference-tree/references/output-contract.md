@@ -156,11 +156,10 @@ Link every executed artifact to exact input hashes, the approved reference plan 
 Write one row for the focal analysis before choosing the primary alignment:
 
 ```text
-analysis_unit, conservation_class, conservation_scope, conservation_basis,
-evidence_ids, assessment_status, limitations
+analysis_unit	conservation_class	conservation_scope	conservation_basis	evidence_ids	assessment_status	limitations
 ```
 
-Use only the seven classes defined in `recent-msa-trimming-evidence.md`; `assessment_status` is `provisional` until the alignment/trimming review accepts or revises it, then `reviewed`. Use `not-applicable` for a method benchmark or genome-level pseudoalignment whose analysis unit cannot support one biological gene-conservation label. Keep `evidence_ids` as stable accession, orthology, domain, catalog-analysis, or citation identifiers rather than unsupported prose. Bind the reviewed file's SHA-256 to the alignment approval and final checksum manifest. If class, scope, basis, or evidence changes, reopen the alignment decision instead of silently replacing the row. The bundled planner does not infer or emit this host-side biological judgment.
+Encode the file as UTF-8, LF-terminated, tab-delimited text; do not emit comma-separated content under a `.tsv` name. Start from `assets/conservation-assessment.example.tsv`, replace its illustrative row, and keep exactly one row per focal analysis unit. Use only the seven classes defined in `recent-msa-trimming-evidence.md`; `assessment_status` is `provisional` until the alignment/trimming review accepts or revises it, then `reviewed`. Use `not-applicable` for a method benchmark or genome-level pseudoalignment whose analysis unit cannot support one biological gene-conservation label. Keep `evidence_ids` as stable accession, orthology, domain, catalog-analysis, or citation identifiers rather than unsupported prose. Bind the reviewed file's SHA-256 to the alignment approval and final checksum manifest. If class, scope, basis, or evidence changes, reopen the alignment decision instead of silently replacing the row. The bundled planner does not infer or emit this host-side biological judgment.
 
 ## Literature evidence schema
 

@@ -1,6 +1,6 @@
 ---
 name: bio-gene-to-reference-tree
-description: Build an auditable protein gene tree from an accession, raw amino-acid sequence, or protein or gene name plus source organism. Use when an agent must resolve query metadata and exact NCBI TaxIDs from local taxdump files, curate ortholog or homolog references and an outgroup, cluster redundant candidates, align and trim proteins, run FastTree or IQ-TREE2, generate iTOL or ggtree/ggplot2 figures and metadata, or compare a gene tree with current phylogenetic literature. Require review gates before reference selection and tree inference.
+description: Build an auditable protein gene tree from an accession, raw amino-acid sequence, or protein or gene name plus source organism. Use when an agent must resolve query metadata and exact NCBI TaxIDs from local taxdump files, classify gene-family conservation at an explicit taxonomic scope, curate ortholog or homolog references and outgroups, align and trim proteins, run FastTree or IQ-TREE2, generate iTOL or ggtree/ggplot2 outputs, or compare a gene tree with current phylogenetic literature. Require review gates before reference selection, alignment choice, and tree inference.
 ---
 
 # Gene to Reference Tree
@@ -165,6 +165,7 @@ Do not fabricate a lookup result, sequence, TaxID, orthology call, citation, too
 - [ggtree-visualization.md](references/ggtree-visualization.md): local ggtree/ggplot2 rendering, exact tip joins, support semantics, and vector exports.
 - [workflow.md](references/workflow.md): states, gates, failure conditions, and viral branch.
 - [output-contract.md](references/output-contract.md): request, artifact, plan, manifest, and final-report contracts.
+- `assets/conservation-assessment.example.tsv`: canonical host-authored TSV template; copy it into the run's `evidence/` directory, replace the example row, and review it before alignment approval.
 - `references/request-0.2.schema.json`, `references/plan-0.2.schema.json`, and `references/plan-0.3.schema.json`: portable request and versioned plan schemas.
 - `scripts/gene_to_tree.py`: standard-library offline review-bundle compiler and tool doctor.
 - `scripts/ncbi_taxonomy.py`: strict, standard-library resolver for local `names.dmp` and `nodes.dmp` files.

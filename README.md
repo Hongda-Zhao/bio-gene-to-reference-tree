@@ -128,10 +128,10 @@ Omit `--global` for a project-scoped installation. The same repository can also 
 
 Invoke it directly:
 
-- Codex: `$bio-gene-to-reference-tree Build an auditable protein gene tree for accession XP_012345678.1.`
-- Claude Code: `/bio-gene-to-reference-tree Build an auditable protein gene tree for accession XP_012345678.1.`
+- Codex: `$bio-gene-to-reference-tree Classify this protein family's conservation at an explicit taxonomic scope, then build an auditable tree for accession XP_012345678.1.`
+- Claude Code: `/bio-gene-to-reference-tree Classify this protein family's conservation at an explicit taxonomic scope, then build an auditable tree for accession XP_012345678.1.`
 
-An agent may also load the skill automatically for requests about resolving protein accessions or sequences, validating species names against NCBI taxdump files, selecting phylogenetic references and outgroups, aligning and trimming proteins, inferring a FastTree/IQ-TREE tree, or generating iTOL or ggtree/ggplot2 outputs.
+An agent may also load the skill automatically for requests about resolving protein accessions or sequences, classifying gene-family conservation at an explicit scope, validating species names against NCBI taxdump files, selecting phylogenetic references and outgroups, aligning and trimming proteins, inferring a FastTree/IQ-TREE tree, or generating iTOL or ggtree/ggplot2 outputs.
 
 To inspect the deterministic core without database access or bioinformatics executables, run the [offline review example](#run-the-offline-review-example).
 
@@ -166,6 +166,7 @@ accession | raw protein | name + organism
   -> taxonomically balanced references + candidate outgroups
   -> optional role-aware MMseqs2 clustering
   -> reference/outgroup approval
+  -> scale-aware conservation assessment
   -> MAFFT + raw-MSA QC
   -> trimAl sensitivity profiles
   -> alignment/trimming approval
@@ -190,6 +191,7 @@ The workflow supports:
 | Exact NCBI scientific name → TaxID | Yes | Validates local `names.dmp` + `nodes.dmp` | Verified taxdump snapshot required |
 | RefSeq → UniProt/nr → profile/domain fallback | Yes | Records configured tiers | Database/search tools required |
 | Reference/outgroup selection | Yes | Deterministic | Taxonomy evidence supplied by host |
+| Scale-aware conservation assessment | Yes | Canonical TSV template; planner does not infer it | Orthology, domain, distribution, and literature evidence supplied by host |
 | Conditional MMseqs2 clustering | Yes | Plans/gates/re-imports cluster IDs | MMseqs2 execution required |
 | MAFFT and trimAl profiles | Yes | Emits exact argv arrays | Executables required |
 | FastTree or IQ-TREE2 | Yes | Emits support-aware argv arrays | Executables required |
@@ -218,6 +220,8 @@ These are routing labels, not measured rates or claims of orthology. The same fa
 
 For the homepage BRCA1 example, the useful provisional label is `broadly-conserved-gene-family` **across the sampled vertebrates**: the reviewed records share the BRCA1 ortholog-group context and terminal RING/BRCT architecture, while the full-length proteins still contain difficult, more variable regions. It would be misleading to call BRCA1 simply “conserved” without that scope and basis.
 
+The executed BRCA1 run predates the conservation-assessment contract, so it is not retroactively presented as having a reviewed, hash-bound assessment. New runs start from the canonical [`conservation-assessment.example.tsv`](skills/bio-gene-to-reference-tree/assets/conservation-assessment.example.tsv), replace its illustrative BRCA1 row, and bind the reviewed artifact to alignment approval.
+
 ## Repository layout
 
 ```text
@@ -237,7 +241,7 @@ tests/
 .github/workflows/validate.yml
 ```
 
-The installable directory follows the open [Agent Skills specification](https://agentskills.io/specification). Vendor-specific behavior is not embedded in `SKILL.md`, so the same directory works with Codex, Claude Code, and other compatible clients. `agents/openai.yaml` is optional Codex presentation metadata and does not change the workflow. The BRCA1 run stays outside the installable Skill so its executed artifacts do not consume agent context during ordinary installation. Repository-level tests enforce the portable frontmatter, local resource links, progressive-disclosure limits, schemas, deterministic workflow contract, and worked-example integrity.
+The installable directory follows the open [Agent Skills specification](https://agentskills.io/specification). The shared `SKILL.md` frontmatter and body are the authoritative discovery and workflow surface for Codex, Claude Code, and other compatible clients; no forked Claude-specific prompt is required. `agents/openai.yaml` adds optional Codex presentation metadata but cannot change the scientific workflow or its review gates. The BRCA1 run stays outside the installable Skill so its executed artifacts do not consume agent context during ordinary installation. Repository-level tests enforce the portable frontmatter, local resource links, progressive-disclosure limits, schemas, deterministic workflow contract, and worked-example integrity.
 
 ## Run the offline review example
 
