@@ -1,6 +1,6 @@
 ---
 name: bio-gene-to-reference-tree
-description: Build an auditable protein gene tree from an accession, raw amino-acid sequence, or protein or gene name plus source organism. Use when an agent must resolve query metadata and exact NCBI TaxIDs from local taxdump files, curate ortholog or homolog references and an outgroup, cluster redundant candidates, align and trim proteins, run FastTree or IQ-TREE2, generate iTOL or ggtree/ggplot2 figures and metadata, or compare a gene tree with current phylogenetic literature. Require review gates before reference selection and tree inference.
+description: Build an auditable protein gene tree from an accession, raw amino-acid sequence, or protein or gene name plus source organism. Use when an agent must resolve query metadata and exact NCBI TaxIDs from local taxdump files, classify gene-family conservation at an explicit taxonomic scope, curate ortholog or homolog references and outgroups, align and trim proteins, run FastTree or IQ-TREE2, generate iTOL or ggtree/ggplot2 outputs, or compare a gene tree with current phylogenetic literature. Require review gates before reference selection, alignment choice, and tree inference.
 ---
 
 # Gene to Reference Tree
@@ -77,6 +77,10 @@ Keep the representative/member mapping, annotate `cluster_id`, and re-run refere
 
 ### 6. Align and inspect
 
+First confirm that the approved inputs are homologous protein sequences for one gene or protein family. Codon matrices, target-capture loci, concatenated ortholog sets, pangenome core alignments, and reference-mapped SNP pseudoalignments are different data architectures. Use their catalog rows only as contextual evidence; route nucleotide or genome-scale material to a purpose-specific workflow instead of silently applying this protein MAFFT/trimAl path.
+
+Describe conservation with a scale, not a bare binary label. Assign a provisional `conservation_class`, `conservation_scope`, and `conservation_basis` using the controlled vocabulary in [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md). Distinguish deep core markers, clade-conserved markers, broadly conserved families, variable multigene families, lineage-specific or rapidly evolving families, mixed panels, and workflows where the label is not applicable. Base the assignment on taxonomic distribution, copy-number or orthology evidence, marker design, and domain architecture; do not infer sequence conservation from a familiar gene name or from similarity alone. Record the decision in `evidence/conservation_assessment.tsv`, review it before choosing the primary alignment, and bind its hash to the alignment approval and final checksums as specified in [output-contract.md](references/output-contract.md).
+
 Use MAFFT and choose the mode from sequence count and architecture, not divergence alone:
 
 - `auto` for general routing;
@@ -86,11 +90,15 @@ Use MAFFT and choose the mode from sequence count and architecture, not divergen
 
 Inspect coverage, gap fraction, occupancy, conserved motifs, mixed domains, fragments, fusions, duplicate tip IDs, and suspicious long branches. Preserve `alignment.raw.faa`. Read [alignment-and-tree.md](references/alignment-and-tree.md) before choosing or running MAFFT, trimAl, FastTree, or IQ-TREE2.
 
+When recent literature is used to choose or justify an alignment strategy, read [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md) and filter its companion [TSV catalog](references/recent-msa-trimming-evidence.tsv) by molecule, gene or marker architecture, conservation class and scope, dataset scale, and taxonomic depth. Treat matching rows as precedents to verify at the source, never as automatic defaults.
+
 ### 7. Treat trimming as a sensitivity analysis
 
 Use trimAl profiles with explicit `-gt` semantics. A value of `0.98` is extremely strict; `0.10` or `0.05` is extremely permissive. Never infer a threshold solely from “close,” “distant,” or “viral.”
 
 Retain each profile, report columns removed and retained fraction, verify conserved regions, and compare key topology when profiles differ. Stop if trimming removes too much information or changes the biological conclusion. Obtain **alignment/trimming approval** before tree inference.
+
+Keep `not-reported` distinct from `explicit-none` when extracting published methods. Never invent an unreported version, mode, threshold, or CLI translation. Treat `exact` as a reporting-provenance state, not proof that an article interpreted the option correctly; verify decision-bearing flags against the reported tool version and expose any prose-versus-argv conflict before execution.
 
 ### 8. Infer and label support correctly
 
@@ -151,10 +159,13 @@ Do not fabricate a lookup result, sequence, TaxID, orthology call, citation, too
 - [tool-routing.md](references/tool-routing.md): authoritative databases, search tiers, and executable boundaries.
 - [reference-selection.md](references/reference-selection.md): selection, clustering, taxonomic balance, outgroups, and reason codes.
 - [alignment-and-tree.md](references/alignment-and-tree.md): MAFFT, trimAl, FastTree, IQ-TREE2, QC, and support semantics.
+- [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md): a recent-literature routing guide, scale-aware gene-conservation classes, reporting-state semantics, and refresh protocol.
+- [recent-msa-trimming-evidence.tsv](references/recent-msa-trimming-evidence.tsv): machine-readable 2023-08-24 to 2026-08-24 MSA and post-alignment evidence with conservation class, scope, and basis, one row per analysis workflow.
 - [itol-and-literature.md](references/itol-and-literature.md): iTOL files, metadata, evidence search, and gene-tree/species-tree comparison.
 - [ggtree-visualization.md](references/ggtree-visualization.md): local ggtree/ggplot2 rendering, exact tip joins, support semantics, and vector exports.
 - [workflow.md](references/workflow.md): states, gates, failure conditions, and viral branch.
 - [output-contract.md](references/output-contract.md): request, artifact, plan, manifest, and final-report contracts.
+- `assets/conservation-assessment.example.tsv`: canonical host-authored TSV template; copy it into the run's `evidence/` directory, replace the example row, and review it before alignment approval.
 - `references/request-0.2.schema.json`, `references/plan-0.2.schema.json`, and `references/plan-0.3.schema.json`: portable request and versioned plan schemas.
 - `scripts/gene_to_tree.py`: standard-library offline review-bundle compiler and tool doctor.
 - `scripts/ncbi_taxonomy.py`: strict, standard-library resolver for local `names.dmp` and `nodes.dmp` files.

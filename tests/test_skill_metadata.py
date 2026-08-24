@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import csv
+import json
 import re
 import unittest
-import json
+from datetime import date
 from pathlib import Path
 
 
@@ -41,6 +43,8 @@ class SkillPackageTests(unittest.TestCase):
         self.assertGreater(len(description), 0)
         self.assertLessEqual(len(description), 1024)
         self.assertNotRegex(description, r"[<>]")
+        self.assertIn("gene-family conservation", description)
+        self.assertIn("explicit taxonomic scope", description)
 
     def test_progressive_disclosure_and_local_links(self) -> None:
         skill_document = SKILL_ROOT / "SKILL.md"
@@ -85,6 +89,7 @@ class SkillPackageTests(unittest.TestCase):
             "assets/query.example.faa",
             "assets/candidates.example.faa",
             "assets/candidates.example.tsv",
+            "assets/conservation-assessment.example.tsv",
             "references/workflow.md",
             "references/reference-selection.md",
             "references/output-contract.md",
@@ -92,6 +97,8 @@ class SkillPackageTests(unittest.TestCase):
             "references/query-resolution.md",
             "references/taxonomy-resolution.md",
             "references/alignment-and-tree.md",
+            "references/recent-msa-trimming-evidence.md",
+            "references/recent-msa-trimming-evidence.tsv",
             "references/itol-and-literature.md",
             "references/ggtree-visualization.md",
             "references/request-0.2.schema.json",
@@ -103,11 +110,268 @@ class SkillPackageTests(unittest.TestCase):
         missing = sorted(path for path in expected if not (SKILL_ROOT / path).is_file())
         self.assertEqual(missing, [])
 
+    def test_conservation_assessment_template_is_real_tsv(self) -> None:
+        template = SKILL_ROOT / "assets" / "conservation-assessment.example.tsv"
+        raw = template.read_text(encoding="utf-8")
+        self.assertTrue(raw.endswith("\n"))
+        self.assertNotIn("\r", raw)
+        rows = list(csv.DictReader(raw.splitlines(), delimiter="\t"))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(
+            set(rows[0]),
+            {
+                "analysis_unit",
+                "conservation_class",
+                "conservation_scope",
+                "conservation_basis",
+                "evidence_ids",
+                "assessment_status",
+                "limitations",
+            },
+        )
+        row = rows[0]
+        self.assertEqual(row["conservation_class"], "broadly-conserved-gene-family")
+        self.assertEqual(row["assessment_status"], "provisional")
+        self.assertIn("Template only", row["limitations"])
+        self.assertIn("NP_009225.1", row["evidence_ids"])
+
+    def test_recent_msa_trimming_evidence_catalog_is_auditable(self) -> None:
+        catalog = SKILL_ROOT / "references" / "recent-msa-trimming-evidence.tsv"
+        raw = catalog.read_text(encoding="utf-8")
+        self.assertNotIn("\r", raw)
+        self.assertNotIn("\x00", raw)
+
+        rows = list(csv.DictReader(raw.splitlines(), delimiter="\t"))
+        self.assertTrue(rows)
+        required_columns = {
+            "analysis_id",
+            "citation_id",
+            "publication_date",
+            "title",
+            "journal",
+            "doi",
+            "pmid",
+            "pmcid",
+            "broad_group",
+            "taxon_scope",
+            "gene_or_markers",
+            "conservation_class",
+            "conservation_scope",
+            "conservation_basis",
+            "molecule_type",
+            "dataset_scale",
+            "msa_tool",
+            "msa_version",
+            "msa_parameters",
+            "msa_reporting_status",
+            "trimming_method",
+            "trimming_version",
+            "trimming_parameters",
+            "trimming_status",
+            "tree_method",
+            "evidence_location",
+            "source_url",
+            "retrieved_at",
+            "curator_note",
+        }
+        self.assertEqual(set(rows[0]), required_columns)
+        self.assertGreaterEqual(len(rows), 50)
+        self.assertGreaterEqual(len({row["citation_id"] for row in rows}), 40)
+
+        analysis_ids = [row["analysis_id"] for row in rows]
+        self.assertEqual(len(analysis_ids), len(set(analysis_ids)))
+        for analysis_id in analysis_ids:
+            self.assertRegex(analysis_id, r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+        window_start = date(2023, 8, 24)
+        window_end = date(2026, 8, 24)
+        required_values = {
+            "citation_id",
+            "title",
+            "journal",
+            "taxon_scope",
+            "gene_or_markers",
+            "conservation_class",
+            "conservation_scope",
+            "conservation_basis",
+            "molecule_type",
+            "dataset_scale",
+            "msa_tool",
+            "msa_version",
+            "msa_parameters",
+            "trimming_method",
+            "trimming_version",
+            "trimming_parameters",
+            "tree_method",
+            "evidence_location",
+            "curator_note",
+        }
+        bibliographic_fields = (
+            "publication_date",
+            "title",
+            "journal",
+            "doi",
+            "pmid",
+            "pmcid",
+            "source_url",
+        )
+        citations: dict[str, tuple[str, ...]] = {}
+
+        for row in rows:
+            self.assertNotIn(None, row)
+            for field in required_values:
+                self.assertTrue(row[field].strip(), f"Empty {field}: {row['analysis_id']}")
+
+            publication_date = date.fromisoformat(row["publication_date"])
+            self.assertGreaterEqual(publication_date, window_start)
+            self.assertLessEqual(publication_date, window_end)
+            self.assertEqual(date.fromisoformat(row["retrieved_at"]), window_end)
+            self.assertIn(row["msa_reporting_status"], {"exact", "partial"})
+            self.assertIn(
+                row["trimming_status"],
+                {"exact", "partial", "explicit-none", "not-reported"},
+            )
+            if row["msa_reporting_status"] == "exact":
+                msa_report = f"{row['msa_version']} {row['msa_parameters']}".lower()
+                self.assertNotIn("not reported", msa_report)
+                self.assertNotIn("not restated", msa_report)
+                self.assertNotEqual(row["msa_version"], "NA")
+            if row["trimming_status"] == "exact":
+                trimming_report = (
+                    f"{row['trimming_method']} {row['trimming_version']} "
+                    f"{row['trimming_parameters']}"
+                ).lower()
+                self.assertNotIn("not reported", trimming_report)
+                self.assertNotIn("not restated", trimming_report)
+                self.assertNotEqual(row["trimming_version"], "NA")
+            elif row["trimming_status"] == "explicit-none":
+                self.assertEqual(row["trimming_method"], "None")
+                self.assertEqual(row["trimming_version"], "NA")
+                self.assertIn("explicit", row["trimming_parameters"].lower())
+            elif row["trimming_status"] == "not-reported":
+                self.assertEqual(row["trimming_method"], "not reported")
+                self.assertEqual(row["trimming_version"], "NA")
+                self.assertRegex(
+                    row["trimming_parameters"].lower(),
+                    r"(?:not reported|no .* reported)",
+                )
+            self.assertTrue(row["source_url"].startswith("https://"))
+            self.assertTrue(
+                any(row[field] != "NA" for field in ("doi", "pmid", "pmcid")),
+                f"No stable identifier: {row['analysis_id']}",
+            )
+            if row["doi"] != "NA":
+                self.assertTrue(row["doi"].startswith("10."))
+            if row["pmid"] != "NA":
+                self.assertRegex(row["pmid"], r"^[0-9]+$")
+            if row["pmcid"] != "NA":
+                self.assertRegex(row["pmcid"], r"^PMC[0-9]+$")
+
+            citation = tuple(row[field] for field in bibliographic_fields)
+            previous = citations.setdefault(row["citation_id"], citation)
+            self.assertEqual(previous, citation)
+
+        broad_groups = {row["broad_group"] for row in rows}
+        self.assertTrue(
+            {"animals", "plants", "fungi", "protists", "bacteria", "archaea", "viruses"}
+            <= broad_groups
+        )
+        msa_tools = " ".join(row["msa_tool"] for row in rows)
+        trimming_tools = " ".join(row["trimming_method"] for row in rows)
+        for tool in ("MAFFT", "MUSCLE", "Clustal Omega"):
+            self.assertIn(tool, msa_tools)
+        for tool in ("trimAl", "ClipKIT", "BMGE", "Gblocks"):
+            self.assertIn(tool, trimming_tools)
+        trimming_states = {row["trimming_status"] for row in rows}
+        self.assertIn("explicit-none", trimming_states)
+        self.assertIn("not-reported", trimming_states)
+
+        conservation_classes = {
+            "universal-or-deep-core",
+            "clade-conserved-marker",
+            "broadly-conserved-gene-family",
+            "variable-multigene-family",
+            "lineage-specific-or-rapidly-evolving",
+            "mixed-conservation-panel",
+            "not-applicable",
+        }
+        self.assertEqual(
+            {row["conservation_class"] for row in rows}, conservation_classes
+        )
+        for row in rows:
+            self.assertNotIn(
+                row["conservation_class"],
+                {"conserved", "non-conserved", "nonconserved"},
+            )
+            self.assertGreaterEqual(len(row["conservation_scope"].split()), 2)
+            self.assertGreaterEqual(len(row["conservation_basis"].split()), 4)
+
+        by_analysis = {row["analysis_id"]: row for row in rows}
+        expected_routing = {
+            "myrmicini-uce": "clade-conserved-marker",
+            "eukaryote-ccm-enzyme-trees": "broadly-conserved-gene-family",
+            "early-hexapod-receptor-sensitivity": "variable-multigene-family",
+            "ciliate-lgt-proteins": "lineage-specific-or-rapidly-evolving",
+            "ska2-gubbins-recomb": "not-applicable",
+            "alifilter-cyanobacteria-benchmark": "not-applicable",
+            "cloak-mammal-ortholog-benchmark": "not-applicable",
+            "asgard-phylome-ensemble": "mixed-conservation-panel",
+        }
+        for analysis_id, expected_class in expected_routing.items():
+            self.assertEqual(
+                by_analysis[analysis_id]["conservation_class"], expected_class
+            )
+
+        pseudoalignments = [
+            row for row in rows if "pseudoalignment" in row["molecule_type"].lower()
+        ]
+        self.assertTrue(pseudoalignments)
+        for row in pseudoalignments:
+            self.assertNotIn("MAFFT", row["msa_tool"])
+            self.assertNotIn("trimAl", row["trimming_method"])
+            self.assertIn("pseudoalignment", row["curator_note"].lower())
+            self.assertEqual(row["conservation_class"], "not-applicable")
+
     def test_codex_metadata_matches_the_skill(self) -> None:
         content = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
         self.assertIn('display_name: "Gene-to-Reference Tree"', content)
         self.assertRegex(content, r'short_description: "[^"\n]{25,64}"')
         self.assertIn("$bio-gene-to-reference-tree", content)
+        self.assertIn("conservation", content)
+        self.assertIn("explicit taxonomic scope", content)
+
+    def test_conservation_assessment_is_a_hash_bound_review_artifact(self) -> None:
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (SKILL_ROOT / "references" / "workflow.md").read_text(encoding="utf-8")
+        contract = (SKILL_ROOT / "references" / "output-contract.md").read_text(
+            encoding="utf-8"
+        )
+        for content in (skill, workflow, contract):
+            self.assertIn("conservation_assessment.tsv", content)
+        for field in (
+            "conservation_class",
+            "conservation_scope",
+            "conservation_basis",
+            "evidence_ids",
+            "assessment_status",
+            "limitations",
+        ):
+            self.assertIn(field, contract)
+        self.assertIn("SHA-256", contract)
+        self.assertIn("reopen", contract)
+        expected_header = "\t".join(
+            (
+                "analysis_unit",
+                "conservation_class",
+                "conservation_scope",
+                "conservation_basis",
+                "evidence_ids",
+                "assessment_status",
+                "limitations",
+            )
+        )
+        self.assertIn(expected_header, contract)
+        self.assertNotIn("analysis_unit, conservation_class", contract)
 
     def test_v03_workflow_and_v02_schema_surfaces_are_synchronized(self) -> None:
         script = (SKILL_ROOT / "scripts" / "gene_to_tree.py").read_text(encoding="utf-8")
@@ -138,6 +402,11 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn("actions/workflows/validate.yml/badge.svg", readme)
         self.assertIn("npx skills add Hongda-Zhao/bio-gene-to-reference-tree", readme)
         self.assertIn("https://agentskills.io/specification", readme)
+        self.assertIn("--agent codex", readme)
+        self.assertIn("--agent claude-code", readme)
+        self.assertIn("$bio-gene-to-reference-tree", readme)
+        self.assertIn("/bio-gene-to-reference-tree", readme)
+        self.assertIn("no forked Claude-specific prompt is required", readme)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,18 @@
 
 Use a staged workflow so that automated acquisition cannot silently become an approved biological analysis.
 
+## Contents
+
+- [State model](#state-model)
+- [Query resolution](#gate-1-query-resolution)
+- [Reference and outgroup approval](#gate-2-reference-and-outgroup-approval)
+- [Alignment and trimming approval](#gate-3-alignment-and-trimming-approval)
+- [Tree inference](#tree-inference-gate)
+- [Annotation and evidence](#annotation-and-evidence-gate)
+- [Completion contract](#completion-contract)
+- [Bundled helper behavior](#bundled-helper-behavior)
+- [Out-of-scope routing](#out-of-scope-routing)
+
 ## State model
 
 ```text
@@ -47,6 +59,8 @@ Tie approval to the current `plan_hash`. If MMseqs2 is required, execute it only
 
 ## Gate 3: alignment and trimming approval
 
+Before choosing the primary alignment, review `evidence/conservation_assessment.tsv`: one focal analysis unit, one controlled class, an explicit comparison scope, an evidence basis, stable evidence IDs, and limitations. Accept or revise the provisional row, mark it `reviewed`, and bind its SHA-256 to the alignment approval. A changed assessment reopens this gate.
+
 After MAFFT, present raw-MSA length, per-tip gap/coverage statistics, column occupancy, conserved motif checks, unusual insertions, excluded sequences, and any domain conflict. Never silently remove a sequence.
 
 When trimming is enabled, present every trimAl profile, threshold semantics, retained length/fraction, removed-column record, motif retention, and topology sensitivity if fast profile trees were compared. Require an explicit choice of the primary alignment before IQ-TREE2.
@@ -81,6 +95,7 @@ Mark the workflow complete only when the final report includes:
 - resolved query and acquisition provenance;
 - selected/rejected references and cluster mapping;
 - raw and approved MSA plus QC;
+- reviewed, hash-bound conservation assessment;
 - unrooted tree and optional separately rooted tree;
 - correctly named support measures and model;
 - iTOL roles and full sequence metadata;
