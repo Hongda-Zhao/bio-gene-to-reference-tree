@@ -5,6 +5,10 @@ from __future__ import annotations
 import csv
 import json
 import re
+import shutil
+import subprocess
+import sys
+import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
@@ -392,6 +396,101 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn("taxonomy", request_schema["properties"])
         self.assertIn("taxonomy_plan", plan_schema["required"])
 
+    def test_portable_bundle_copies_to_cursor_and_claude_paths(self) -> None:
+        source_files = {
+            path.relative_to(SKILL_ROOT)
+            for path in SKILL_ROOT.rglob("*")
+            if path.is_file()
+            and "__pycache__" not in path.parts
+            and path.suffix != ".pyc"
+        }
+        self.assertTrue(source_files)
+        self.assertFalse(any(path.is_symlink() for path in SKILL_ROOT.rglob("*")))
+
+        vendor_skill_copies: list[Path] = []
+        for vendor_root_name in (".agents", ".cursor", ".claude"):
+            vendor_root = REPOSITORY_ROOT / vendor_root_name
+            if vendor_root.exists():
+                vendor_skill_copies.extend(vendor_root.rglob("SKILL.md"))
+        self.assertEqual(vendor_skill_copies, [])
+
+        destinations = (
+            Path(".agents/skills/bio-gene-to-reference-tree"),
+            Path(".cursor/skills/bio-gene-to-reference-tree"),
+            Path(".claude/skills/bio-gene-to-reference-tree"),
+        )
+        local_link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_root = Path(temporary_directory)
+            for relative_destination in destinations:
+                with self.subTest(destination=str(relative_destination)):
+                    destination = temporary_root / relative_destination
+                    shutil.copytree(
+                        SKILL_ROOT,
+                        destination,
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+                    )
+                    copied_files = {
+                        path.relative_to(destination)
+                        for path in destination.rglob("*")
+                        if path.is_file()
+                    }
+                    self.assertEqual(copied_files, source_files)
+                    for relative_path in source_files:
+                        self.assertEqual(
+                            (destination / relative_path).read_bytes(),
+                            (SKILL_ROOT / relative_path).read_bytes(),
+                        )
+
+                    for document in destination.rglob("*.md"):
+                        content = document.read_text(encoding="utf-8")
+                        for raw_target in local_link_pattern.findall(content):
+                            if raw_target.startswith(("http://", "https://", "mailto:", "#")):
+                                continue
+                            relative_target = raw_target.split("#", 1)[0]
+                            if not relative_target:
+                                continue
+                            resolved_target = (document.parent / relative_target).resolve()
+                            self.assertTrue(resolved_target.is_relative_to(destination.resolve()))
+                            self.assertTrue(resolved_target.exists())
+
+                    help_result = subprocess.run(
+                        [
+                            sys.executable,
+                            str(destination / "scripts" / "gene_to_tree.py"),
+                            "--help",
+                        ],
+                        cwd=destination,
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        check=False,
+                    )
+                    self.assertEqual(help_result.returncode, 0, help_result.stderr)
+                    self.assertIn("usage:", help_result.stdout.lower())
+
+    def test_claude_marketplace_wraps_only_the_canonical_skill(self) -> None:
+        marketplace_path = REPOSITORY_ROOT / ".claude-plugin" / "marketplace.json"
+        marketplace = json.loads(marketplace_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(marketplace["name"], "hongda-zhao-bio-skills")
+        self.assertEqual(marketplace["owner"]["name"], "Hongda Zhao")
+        self.assertEqual(len(marketplace["plugins"]), 1)
+        plugin = marketplace["plugins"][0]
+        self.assertEqual(plugin["name"], "bio-gene-to-reference-tree")
+        self.assertEqual(plugin["source"], "./")
+        self.assertIs(plugin["strict"], False)
+        self.assertEqual(
+            plugin["skills"],
+            ["./skills/bio-gene-to-reference-tree"],
+        )
+
+        referenced_skill = (REPOSITORY_ROOT / plugin["skills"][0]).resolve()
+        self.assertEqual(referenced_skill, SKILL_ROOT.resolve())
+        self.assertTrue((referenced_skill / "SKILL.md").is_file())
+        self.assertFalse((REPOSITORY_ROOT / ".claude-plugin" / "skills").exists())
+
     def test_public_discovery_surfaces_are_documented(self) -> None:
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(
@@ -403,10 +502,35 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn("npx skills add Hongda-Zhao/bio-gene-to-reference-tree", readme)
         self.assertIn("https://agentskills.io/specification", readme)
         self.assertIn("--agent codex", readme)
+        self.assertIn("--agent cursor", readme)
         self.assertIn("--agent claude-code", readme)
         self.assertIn("$bio-gene-to-reference-tree", readme)
         self.assertIn("/bio-gene-to-reference-tree", readme)
-        self.assertIn("no forked Claude-specific prompt is required", readme)
+        self.assertIn("https://cursor.com/docs/skills", readme)
+        self.assertIn("https://code.claude.com/docs/en/skills", readme)
+        self.assertIn("https://code.claude.com/docs/en/plugin-marketplaces", readme)
+        self.assertIn(".cursor/skills/bio-gene-to-reference-tree/", readme)
+        self.assertIn("~/.cursor/skills/bio-gene-to-reference-tree/", readme)
+        self.assertIn(".claude/skills/bio-gene-to-reference-tree/", readme)
+        self.assertIn("~/.claude/skills/bio-gene-to-reference-tree/", readme)
+        self.assertIn("Remote Rule (Github)", readme)
+        self.assertIn("Cursor 2.4+", readme)
+        self.assertIn("Custom Mode", readme)
+        self.assertIn("complete `skills/bio-gene-to-reference-tree/` package", readme)
+        self.assertIn("a Claude Code project installation belongs in", readme)
+        self.assertIn("/plugin marketplace add Hongda-Zhao/bio-gene-to-reference-tree", readme)
+        self.assertIn(
+            "/bio-gene-to-reference-tree:bio-gene-to-reference-tree", readme
+        )
+        self.assertIn("no forked Cursor- or Claude-specific prompt is required", readme)
+
+        tool_routing = (
+            SKILL_ROOT / "references" / "tool-routing.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Codex, Cursor, Claude Code", tool_routing)
+        self.assertFalse((SKILL_ROOT / "CLAUDE.md").exists())
+        self.assertFalse((SKILL_ROOT / ".cursor").exists())
+        self.assertFalse((SKILL_ROOT / ".cursorrules").exists())
 
 
 if __name__ == "__main__":

@@ -64,4 +64,4 @@ When the host agent has separate authorized capabilities, perform acquisition or
 
 ## Portable-agent behavior
 
-Keep scientific instructions independent of Codex-, Claude-, or vendor-specific tool names. Resolve the loaded skill root at runtime, use relative artifact paths, standard Python entry points, and argv arrays with no `shell=True`. A client-specific UI manifest may improve discovery but must not alter the workflow or bypass review gates.
+Keep scientific instructions independent of Codex, Cursor, Claude Code, or other vendor-specific tool names. Resolve the loaded skill root at runtime, use relative artifact paths, standard Python entry points, and argv arrays with no `shell=True`. A client-specific UI manifest may improve discovery but must not alter the workflow or bypass review gates.
