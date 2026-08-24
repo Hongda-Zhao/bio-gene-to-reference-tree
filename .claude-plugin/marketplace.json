@@ -1,0 +1,19 @@
+{
+  "name": "hongda-zhao-bio-skills",
+  "owner": {
+    "name": "Hongda Zhao",
+    "url": "https://github.com/Hongda-Zhao"
+  },
+  "description": "Auditable bioinformatics Agent Skills maintained by Hongda Zhao",
+  "plugins": [
+    {
+      "name": "bio-gene-to-reference-tree",
+      "description": "Build an auditable protein gene tree from an accession, sequence, or protein or gene name plus source organism",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/bio-gene-to-reference-tree"
+      ]
+    }
+  ]
+}

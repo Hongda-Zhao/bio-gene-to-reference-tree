@@ -105,7 +105,7 @@ $bio-gene-to-reference-tree Build an auditable ortholog protein tree for human B
 
 ## Quick start
 
-Browse the rendered Skill on [skills.sh](https://skills.sh/hongda-zhao/bio-gene-to-reference-tree/bio-gene-to-reference-tree), or install it interactively for any supported agent:
+Browse the rendered Skill on [skills.sh](https://skills.sh/hongda-zhao/bio-gene-to-reference-tree/bio-gene-to-reference-tree), or install it interactively for any supported agent with the third-party [`skills` CLI](https://github.com/vercel-labs/skills):
 
 ```bash
 npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
@@ -119,6 +119,10 @@ For an explicit global installation:
 npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
   --skill bio-gene-to-reference-tree --agent codex --global
 
+# Cursor
+npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
+  --skill bio-gene-to-reference-tree --agent cursor --global
+
 # Claude Code
 npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
   --skill bio-gene-to-reference-tree --agent claude-code --global
@@ -126,16 +130,37 @@ npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
 
 Omit `--global` for a project-scoped installation. The same repository can also be selected interactively with `npx skills add Hongda-Zhao/bio-gene-to-reference-tree`.
 
+Claude Code also has an official GitHub Marketplace route, backed by this repository's thin `.claude-plugin/marketplace.json` wrapper:
+
+```text
+/plugin marketplace add Hongda-Zhao/bio-gene-to-reference-tree
+/plugin install bio-gene-to-reference-tree@hongda-zhao-bio-skills
+```
+
+If the installation summary requests it, run `/reload-plugins`. A plugin-installed Skill has a stable namespaced command, `/bio-gene-to-reference-tree:bio-gene-to-reference-tree ...`; the bare `/bio-gene-to-reference-tree ...` examples below apply to manual or `skills` CLI installations. See Anthropic's [plugin marketplace documentation](https://code.claude.com/docs/en/plugin-marketplaces).
+
 Invoke it directly:
 
 - Codex: `$bio-gene-to-reference-tree Classify this protein family's conservation at an explicit taxonomic scope, then build an auditable tree for accession XP_012345678.1.`
+- Cursor 2.4+: `/bio-gene-to-reference-tree Classify this protein family's conservation at an explicit taxonomic scope, then build an auditable tree for accession XP_012345678.1.` Type `/` in Agent chat to find it; press `Option+Enter` on macOS or `Alt+Enter` on Windows to keep it active as a **Custom Mode** for the session.
 - Claude Code: `/bio-gene-to-reference-tree Classify this protein family's conservation at an explicit taxonomic scope, then build an auditable tree for accession XP_012345678.1.`
 
 An agent may also load the skill automatically for requests about resolving protein accessions or sequences, classifying gene-family conservation at an explicit scope, validating species names against NCBI taxdump files, selecting phylogenetic references and outgroups, aligning and trimming proteins, inferring a FastTree/IQ-TREE tree, or generating iTOL or ggtree/ggplot2 outputs.
 
 To inspect the deterministic core without database access or bioinformatics executables, run the [offline review example](#run-the-offline-review-example).
 
-The third-party `skills` CLI supports both agents and reports anonymous installation telemetry by default. Set `DISABLE_TELEMETRY=1` when running it if you do not want an installation counted. To install manually, copy `skills/bio-gene-to-reference-tree/` to `~/.codex/skills/bio-gene-to-reference-tree/` for Codex or `~/.claude/skills/bio-gene-to-reference-tree/` for Claude Code. For a repository-local installation shared by compatible agents, use `.agents/skills/bio-gene-to-reference-tree/`.
+### Cursor and Claude Code locations
+
+The source directory to install is the complete `skills/bio-gene-to-reference-tree/` package, not `SKILL.md` alone; its relative links require the bundled `scripts/`, `references/`, and `assets/`. These are the native discovery locations documented by [Cursor](https://cursor.com/docs/skills) and [Claude Code](https://code.claude.com/docs/en/skills):
+
+| Client | Project-level destination | User-level destination |
+| --- | --- | --- |
+| Cursor | `.cursor/skills/bio-gene-to-reference-tree/` or `.agents/skills/bio-gene-to-reference-tree/` | `~/.cursor/skills/bio-gene-to-reference-tree/` or `~/.agents/skills/bio-gene-to-reference-tree/` |
+| Claude Code | `.claude/skills/bio-gene-to-reference-tree/` | `~/.claude/skills/bio-gene-to-reference-tree/` |
+
+Cursor's official Skills page also documents a logged-in UI route: open **Customize → Rules → Add Rule → Remote Rule (Github)** and enter `https://github.com/Hongda-Zhao/bio-gene-to-reference-tree`. Confirm the result under **Customize → Skills**; if that evolving UI does not import the nested Skill, use the CLI or complete-directory installation above. Cursor can additionally discover Claude and Codex skill directories, but the native Cursor or shared `.agents/skills/` locations are clearer for a new installation. If Cursor does not show a newly installed Skill, restart it and check **Customize → Skills** again. Claude Code watches an existing `.claude/skills/` directory live; restart it only if that top-level directory did not exist when the session began.
+
+The `skills` CLI supports Codex, Cursor, and Claude Code and reports anonymous installation telemetry by default. Set `DISABLE_TELEMETRY=1` when running it if you do not want an installation counted. Codex can still be installed manually at `~/.codex/skills/bio-gene-to-reference-tree/`. Use `.agents/skills/bio-gene-to-reference-tree/` only with Cursor or another client that explicitly supports that shared directory; a Claude Code project installation belongs in `.claude/skills/bio-gene-to-reference-tree/`.
 
 ## Why this project exists
 
@@ -237,11 +262,12 @@ skills/bio-gene-to-reference-tree/
 examples/brca1/
   README.md
   inputs/ review/ qc/ alignment/ tree/ annotation/ figures/ evidence/ report/
+.claude-plugin/marketplace.json
 tests/
 .github/workflows/validate.yml
 ```
 
-The installable directory follows the open [Agent Skills specification](https://agentskills.io/specification). The shared `SKILL.md` frontmatter and body are the authoritative discovery and workflow surface for Codex, Claude Code, and other compatible clients; no forked Claude-specific prompt is required. `agents/openai.yaml` adds optional Codex presentation metadata but cannot change the scientific workflow or its review gates. The BRCA1 run stays outside the installable Skill so its executed artifacts do not consume agent context during ordinary installation. Repository-level tests enforce the portable frontmatter, local resource links, progressive-disclosure limits, schemas, deterministic workflow contract, and worked-example integrity.
+The installable directory follows the open [Agent Skills specification](https://agentskills.io/specification). The shared `SKILL.md` frontmatter and body are the authoritative discovery and workflow surface for Codex, Cursor, Claude Code, and other compatible clients; no forked Cursor- or Claude-specific prompt is required. `agents/openai.yaml` adds optional Codex presentation metadata, while `.claude-plugin/marketplace.json` adds optional Claude Code distribution metadata; neither can change the scientific workflow or its review gates. The BRCA1 run stays outside the installable Skill so its executed artifacts do not consume agent context during ordinary installation. Repository-level tests enforce the portable frontmatter, local resource links, progressive-disclosure limits, schemas, deterministic workflow contract, portable bundle copies at documented client paths, thin client metadata, and worked-example integrity.
 
 ## Run the offline review example
 
