@@ -1,0 +1,52 @@
+{
+  "schema_version": "0.1",
+  "profile_id": "hybrid-agent-hpc-example",
+  "intent": "auto",
+  "inputs": {
+    "query_kind": "accession-or-name",
+    "query_resolved": false,
+    "query_location": "absent",
+    "candidates_location": "absent",
+    "cluster_mapping_location": "absent",
+    "alignment_location": "absent",
+    "tree_location": "absent",
+    "tree_root_state": "none",
+    "metadata_location": "absent",
+    "candidate_count": null,
+    "taxdump_location": "absent",
+    "sequence_database_location": "absent",
+    "sequence_database_format": "none",
+    "cached_literature": false
+  },
+  "capabilities": {
+    "compute_shell": true,
+    "host_shell": true,
+    "database_lookup": true,
+    "literature_search": true,
+    "file_transfer": true,
+    "compute_tree_io": false,
+    "host_tree_io": false,
+    "web_upload": false
+  },
+  "permissions": {
+    "public_database_network": true,
+    "remote_sequence_submission": false,
+    "literature_network": true,
+    "itol_upload": false
+  },
+  "compute": {
+    "target": "hpc",
+    "scheduler": "pbs",
+    "threads": 16,
+    "memory_gb": 64
+  },
+  "requirements": {
+    "trimming": true,
+    "exact_taxonomy": true,
+    "rooted_tree": true,
+    "visualization": "either",
+    "current_literature": true,
+    "report": true,
+    "clustering_trigger": 200
+  }
+}

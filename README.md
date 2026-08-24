@@ -13,7 +13,7 @@ An open, portable Agent Skill for building an auditable **protein gene tree** fr
 
 It resolves the query, finds and reviews homolog or ortholog candidates, selects references and outgroups, plans or runs MAFFT/trimAl and FastTree/IQ-TREE2 through available host tools, and produces iTOL or local ggtree/ggplot2 outputs. It avoids the unsafe shortcut of treating the top similarity hits as a ready-made reference set.
 
-> **Execution model:** the bundled Python helper is offline and deterministic. Live database/literature retrieval and external bioinformatics execution require authorized host capabilities or local tools.
+> **Execution model:** deterministic `plan`/`route` modes do not run workflow tools. `doctor` defaults to passive `PATH` discovery; live retrieval, active version probes, and bioinformatics execution require separately approved host or local capabilities.
 
 | Stage | Main result |
 |---|---|
@@ -110,6 +110,7 @@ Orange marks the focal human sequence, green marks added references, and gray ma
 | Install on Codex, Cursor, or Claude Code | [Installation guide](docs/installation.md) |
 | Read the agent entrypoint | [Canonical `SKILL.md`](skills/bio-gene-to-reference-tree/SKILL.md) |
 | Follow states and approval gates | [Workflow](skills/bio-gene-to-reference-tree/references/workflow.md) |
+| Match tasks to local, browser, or HPC capabilities | [Environment and software routing](skills/bio-gene-to-reference-tree/references/environment-routing.md) |
 | Inspect artifacts and schemas | [Output contract](skills/bio-gene-to-reference-tree/references/output-contract.md) |
 | Resolve exact NCBI scientific names/TaxIDs | [Taxonomy policy](skills/bio-gene-to-reference-tree/references/taxonomy-resolution.md) |
 | Review recent MSA/trimming evidence | [Evidence guide](skills/bio-gene-to-reference-tree/references/recent-msa-trimming-evidence.md) |

@@ -5,6 +5,7 @@ Write a new output directory for every planning run. Refuse overwrite. Use UTF-8
 ## Contents
 
 - [Request contract](#request-contract)
+- [Environment preflight artifacts](#environment-preflight-artifacts)
 - [Deterministic planning artifacts](#deterministic-planning-artifacts)
 - [Final host-agent execution artifacts](#final-host-agent-execution-artifacts)
 - [Literature evidence schema](#literature-evidence-schema)
@@ -24,6 +25,12 @@ Every live accession or name route must be materialized before planning as:
 The helper never performs the live resolution itself.
 
 `privacy.remote_search_allowed` is a coarse capability gate, not consent to submit an unpublished sequence, tree, or metadata. Record each such submission/upload permission separately in host-side decision provenance, default it to denied when absent, and never treat a planned bundle as authorization for a remote action.
+
+## Environment preflight artifacts
+
+Before external execution, preserve an environment profile, a `doctor` snapshot from the actual compute target, any separate snapshot used to prove host-local executables, and the compiled route decision described in [environment-routing.md](environment-routing.md). Validate them against `environment-profile-0.1.schema.json`, `environment-snapshot-0.1.schema.json`, and `route-decision-0.1.schema.json`. Record each query, candidate bundle, cluster mapping, alignment, tree, metadata table, taxdump, and sequence database as `absent`, `host`, `compute-target`, or `both`; never replace per-artifact location with a blanket “materialized” assertion. A reachable audited cluster mapping can satisfy the Step 5 software requirement, but it must be imported and Step 4 rerun before reference approval. Keep declared host API/tree-I/O capabilities explicit in the profile.
+
+The route decision hashes the normalized profile plus compute/host snapshots into an independent `route_hash`. Do not add machine state to the scientific `plan_hash`. Do not store hostnames, usernames, private paths, raw command output, module commands, credentials, or scheduler job IDs in the portable snapshot. `execution_authorized` remains false because capability selection cannot authorize network, transfer, SSH, scheduler, upload, or external-tool execution.
 
 ## Deterministic planning artifacts
 

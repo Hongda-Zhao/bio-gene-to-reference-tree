@@ -37,6 +37,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_ggtree_contract.py" -v
       - name: Run offline workflow contract tests
         run: python -m unittest discover -s tests -p "test_workflow.py" -v
+      - name: Run environment-routing contract tests
+        run: python -m unittest discover -s tests -p "test_environment_routing.py" -v
       - name: Run BRCA1 worked-example contract tests
         run: python -m unittest discover -s tests -p "test_brca1_*.py" -v
 

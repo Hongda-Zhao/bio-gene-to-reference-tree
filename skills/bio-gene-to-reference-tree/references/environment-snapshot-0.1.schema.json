@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bio-gene-to-reference-tree:environment-snapshot:0.1",
+  "title": "Gene-to-reference-tree environment snapshot 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "workflow_version",
+    "environment_id",
+    "environment_kind",
+    "probe_scope",
+    "probe_mode",
+    "network",
+    "environment",
+    "tools",
+    "r_packages",
+    "executors"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "workflow_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "environment_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+    "environment_kind": {"enum": ["local", "hpc", "ssh", "host-only"]},
+    "probe_scope": {"const": "current-process-environment"},
+    "probe_mode": {"enum": ["path-only", "version-command"]},
+    "network": {"const": "not-probed"},
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operating_system",
+        "architecture",
+        "python_version",
+        "cpu_count",
+        "memory_gb",
+        "scratch_free_gb"
+      ],
+      "properties": {
+        "operating_system": {"type": "string", "minLength": 1, "maxLength": 100},
+        "architecture": {"type": "string", "minLength": 1, "maxLength": 100},
+        "python_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?:[A-Za-z][A-Za-z0-9.+-]*)?$"},
+        "cpu_count": {"type": ["integer", "null"], "minimum": 1},
+        "memory_gb": {"type": ["number", "null"], "minimum": 0},
+        "scratch_free_gb": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "tools": {"$ref": "#/$defs/probeMap"},
+    "r_packages": {"$ref": "#/$defs/packageMap"},
+    "executors": {"$ref": "#/$defs/probeMap"}
+  },
+  "$defs": {
+    "probeMap": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[A-Za-z0-9_.+-]+$"},
+      "additionalProperties": {"$ref": "#/$defs/probe"}
+    },
+    "packageMap": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[A-Za-z0-9_.+-]+$"},
+      "additionalProperties": {"$ref": "#/$defs/package"}
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "executable", "version"],
+      "properties": {
+        "status": {"enum": ["available", "missing", "incompatible", "probe-failed", "unknown"]},
+        "executable": {
+          "anyOf": [
+            {"type": "string", "pattern": "^[A-Za-z0-9_.+-]+$"},
+            {"type": "null"}
+          ]
+        },
+        "version": {
+          "anyOf": [
+            {"type": "string", "maxLength": 64, "pattern": "^[0-9]+(?:\\.[0-9]+){1,3}(?:[-+._][A-Za-z0-9]+)?$"},
+            {"type": "null"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "available"}}, "required": ["status"]},
+          "then": {"properties": {"executable": {"type": "string"}}}
+        }
+      ]
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "version"],
+      "properties": {
+        "status": {"enum": ["available", "missing", "unknown"]},
+        "version": {
+          "anyOf": [
+            {"type": "string", "maxLength": 64, "pattern": "^[0-9]+(?:\\.[0-9]+){1,3}(?:[-+._][A-Za-z0-9]+)?$"},
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  }
+}

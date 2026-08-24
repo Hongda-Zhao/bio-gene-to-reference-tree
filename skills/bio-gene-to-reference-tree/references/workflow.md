@@ -5,6 +5,7 @@ Use a staged workflow so that automated acquisition cannot silently become an ap
 ## Contents
 
 - [State model](#state-model)
+- [Environment preflight](#environment-preflight)
 - [Query resolution](#gate-1-query-resolution)
 - [Reference and outgroup approval](#gate-2-reference-and-outgroup-approval)
 - [Alignment and trimming approval](#gate-3-alignment-and-trimming-approval)
@@ -32,6 +33,12 @@ intake
 ```
 
 Any state may enter `blocked` or `failed`. Invalidate prior approval when a query sequence, candidate record, threshold, cluster mapping, outgroup, MSA, trim profile, model, support method, command, or decision-bearing color changes.
+
+## Environment preflight
+
+Environment feasibility is a sidecar to the scientific state model, not another biological approval state. Before choosing execution mode, create an explicit profile, record every input's host/compute location, run `doctor` on the actual compute target, add a separate host snapshot whenever the route depends on host-local planning, search, rooting, annotation, or rendering executables, and compile a route using [environment-routing.md](environment-routing.md). Re-run after any profile or used snapshot change; declared host API/tree-I/O capabilities remain explicit profile assertions rather than inferred binaries.
+
+Bind the decision to the profile and all used snapshots with `route_hash`, but do not include machine state in `plan_hash`. A newly installed tool cannot approve a changed reference set or MSA, and an approved scientific plan cannot prove that a machine is capable or authorized to execute it.
 
 ## Gate 1: query resolution
 
