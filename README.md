@@ -5,453 +5,116 @@
 
 **Build the reference set before you build the tree.**
 
-An open, portable Agent Skill for taking a protein accession, amino-acid sequence, or protein/gene name plus organism through query resolution, optional exact NCBI Taxonomy validation, reference and outgroup curation, MAFFT/trimAl, FastTree or IQ-TREE2, iTOL annotation, local ggtree/ggplot2 figures, and current-literature comparison.
+[What it does](#what-it-does) · [Install](#install) · [Progressive Skill](#progressive-skill) · [BRCA1 example](#brca1-example) · [Quick links](#quick-links)
 
-Unlike a “top N BLAST hits → alignment → tree” recipe, it keeps paralogs, fragments, isoforms, domain-only matches, redundant taxa, outgroups, thresholds, exclusions, and approval decisions visible in an auditable handoff.
+## What it does
 
-## At a glance
+An open, portable Agent Skill for building an auditable **protein gene tree** from an accession, amino-acid sequence, or protein/gene name plus organism.
 
-- **Start with:** a protein accession, a raw amino-acid sequence, or a protein/gene name plus organism.
-- **Make explicit:** query identity, biological objective, candidate provenance, ortholog/paralog policy, taxonomic sampling, and outgroup rationale.
-- **Review before inference:** selected and rejected references, raw-alignment QC, trimming sensitivity, rooting, model, and support semantics.
-- **Leave an audit trail:** stable reason codes, hashes, exact argument arrays, optional taxdump evidence, iTOL annotations, local figure settings, complete sequence metadata, and a literature-evidence plan.
-- **Load progressively:** one compact `SKILL.md` routes the agent to the current task file; deeper policies, contracts, guides, and evidence are opened only when that task needs them.
-- **Use across agents:** the installable directory follows the open [Agent Skills specification](https://agentskills.io/specification) and contains no vendor-specific workflow instructions.
+It resolves the query, finds and reviews homolog or ortholog candidates, selects references and outgroups, plans or runs MAFFT/trimAl and FastTree/IQ-TREE2 through available host tools, and produces iTOL or local ggtree/ggplot2 outputs. It avoids the unsafe shortcut of treating the top similarity hits as a ready-made reference set.
 
-## Executed example: human BRCA1
+> **Execution model:** the bundled Python helper is offline and deterministic. Live database/literature retrieval and external bioinformatics execution require authorized host capabilities or local tools.
 
-![Outgroup-rooted BRCA1 protein gene tree for 18 vertebrates](examples/brca1/figures/brca1-readme.svg)
+| Stage | Main result |
+|---|---|
+| Query | Versioned record or hash-bound local protein with provenance |
+| References | Selected and rejected candidates, reason codes, taxonomic balance, and outgroup rationale |
+| Alignment | Raw MSA, conservation assessment, QC, and trimming sensitivity |
+| Tree | Unrooted gene tree, optional approved rooted copy, model, and explicitly documented support method |
+| Reporting | Sequence metadata, iTOL roles, optional SVG/PDF, and current-literature comparison |
 
-The repository includes a real, checksum-linked run starting from human RefSeq
-BRCA1 [`NP_009225.1`](https://www.ncbi.nlm.nih.gov/protein/NP_009225.1). It
-retrieved the current NCBI ortholog package, fixed and reviewed 18 proteins,
-validated every scientific name and TaxID against a dated official NCBI
-taxdump, checked N-terminal RING and tandem C-terminal BRCT architecture,
-aligned with MAFFT E-INS-i, compared three trimAl profiles, and inferred the
-primary tree with ModelFinder plus 1,000 UFBoot2 and 1,000 SH-aLRT replicates.
-It is a manual fixed-tip demonstration: the planner reviewed an intentionally
-supplied 18-protein table, not the complete 3,605-protein provider archive.
+The Skill reports a gene tree, not automatically a species tree; similarity is not treated as proof of orthology.
 
-**Protocol-deviation notice.** The prospectively approved review plan fixed the
-reference set and scientific settings, but it did not authorize the exact host
-commands that were executed. Host-side paths differed, trimAl added the
-output-format-only `-fasta` flag, and the successful IQ-TREE 2.4.0
-(`iqtree2`) run used prefix `brca1-balanced` instead of the planned
-`gene-tree`. The input hashes and explicit model, support, thread, and seed
-settings are retained, but scientific equivalence is not asserted for
-non-identical argv. An earlier IQ-TREE 3.1.3 (`iqtree3`) attempt was canceled
-after its module ran single-threaded; none of its output was promoted. This is
-a post-hoc protocol reconciliation, not prospective authorization, and it does
-not retroactively authorize either launch; see the machine-readable
-[`execution_reconciliation.json`](examples/brca1/report/execution_reconciliation.json).
+## Install
 
-| Result | Executed value |
-| --- | --- |
-| Sampling | 16 amniote ingroup proteins + 2 amphibian outgroups |
-| Source audit | Scope-limited inventory of 518 proteins from manually targeted species; not the full 3,605-protein archive |
-| Taxonomy | 18/18 exact scientific-name + TaxID matches and complete frozen-taxdump root-to-tip lineages |
-| Candidate QC | 18/18 passed exact taxonomy and terminal-domain gates |
-| Alignment | 2,179 raw columns; approved balanced trim retained 1,851 (84.95%) |
-| Domain retention | 162/162 RING/BRCT profile checks passed; minimum 93.68% |
-| Trim sensitivity | balanced = strict; raw and permissive each differed by one unrooted split (RF/maximum = 2/30) |
-| Primary ML tree | IQ-TREE 2.4.0; `Q.bird+F+I+R3`; log-likelihood −45,445.3350; 1,000 SH-aLRT + 1,000 UFBoot2 |
-| Model adequacy | 1/18 sequences (snake `XP_026576759.1`) failed the composition chi-square test; no UFBoot convergence coefficient was emitted |
-| Rooting | Amphibian split passed in the final ML tree and all four trim screens; rooted copy retained as a provisional display hypothesis |
-
-Orange marks the human study sequence, green marks expanded references, and
-gray marks the approved amphibian outgroups. This is a **protein gene tree**,
-not a replacement for the accepted species tree; discordant branches are
-reported rather than forced to match the literature. Low full-length BLAST
-coverage for the crocodile tip leaves the deep full-length topology
-provisional because no conserved-block or terminal-domain-only sensitivity
-tree was run. The amphibian root is likewise a conditional display hypothesis,
-not a long-branch-tested biological root.
-
-[View the full executed audit record](examples/brca1/README.md) ·
-[detailed audit SVG](examples/brca1/figures/gene-tree.outgroup-rooted.ggtree.svg) ·
-[detailed audit PDF](examples/brca1/figures/gene-tree.outgroup-rooted.ggtree.pdf) ·
-[unrooted Newick](examples/brca1/tree/gene-tree.unrooted.nwk) ·
-[rooted derivative](examples/brca1/tree/gene-tree.outgroup-rooted.nwk) ·
-[metadata](examples/brca1/annotation/sequence_metadata.tsv) ·
-[taxonomic lineages](examples/brca1/annotation/taxonomy_lineage.tsv) ·
-[iTOL roles](examples/brca1/annotation/itol_roles.txt) ·
-[execution reconciliation](examples/brca1/report/execution_reconciliation.json) ·
-[checksums](examples/brca1/report/checksums.sha256)
-
-### Expanded BRCA1 reference review: 50 candidates
-
-A separate [expanded review bundle](examples/brca1-expanded/README.md) audits
-the full frozen provider scope (558 genes / 3,605 proteins) and proposes 50
-taxonomically balanced BRCA1 ortholog-group members: 45 amniote ingroup tips
-including human plus five amphibian outgroup candidates. All 50 promoted
-records passed exact scientific-name/TaxID resolution and the declared
-RING-plus-two-BRCT gate. One initial frog model was rejected with its raw
-evidence retained, and five deep-divergence records remain visibly flagged for
-manual alignment/outgroup review.
-
-The expanded bundle is intentionally at `pending-reference-approval`: no
-50-tip alignment or tree has been run. This keeps reference selection separate
-from inference and lets reviewers inspect the
-[manifest](examples/brca1-expanded/inputs/selection_manifest.tsv),
-[QC table](examples/brca1-expanded/qc/candidate_qc.tsv),
-[manual flags](examples/brca1-expanded/qc/manual_review_flags.tsv), and
-[deterministic plan](examples/brca1-expanded/review/plan.json) first. The
-executed 18-tip tree above remains the current homepage result.
-
-Try the same workflow with:
-
-```text
-$bio-gene-to-reference-tree Build an auditable ortholog protein tree for human BRCA1 NP_009225.1, retain the unrooted result, test amphibian outgroups, and generate iTOL plus ggtree annotations.
-```
-
-## Quick start
-
-Browse the rendered Skill on [skills.sh](https://skills.sh/hongda-zhao/bio-gene-to-reference-tree/bio-gene-to-reference-tree), or install it interactively for any supported agent with the third-party [`skills` CLI](https://github.com/vercel-labs/skills):
+Browse the rendered Skill on [skills.sh](https://skills.sh/hongda-zhao/bio-gene-to-reference-tree/bio-gene-to-reference-tree), or install it with the third-party `skills` CLI:
 
 ```bash
 npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
   --skill bio-gene-to-reference-tree
 ```
 
-For an explicit global installation:
+For an explicit global client installation, add `--agent codex`, `--agent cursor`, or `--agent claude-code` together with `--global`.
 
-```bash
-# Codex
-npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
-  --skill bio-gene-to-reference-tree --agent codex --global
-
-# Cursor
-npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
-  --skill bio-gene-to-reference-tree --agent cursor --global
-
-# Claude Code
-npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
-  --skill bio-gene-to-reference-tree --agent claude-code --global
-```
-
-Omit `--global` for a project-scoped installation. The same repository can also be selected interactively with `npx skills add Hongda-Zhao/bio-gene-to-reference-tree`.
-
-Claude Code also has an official GitHub Marketplace route, backed by this repository's thin `.claude-plugin/marketplace.json` wrapper:
-
-```text
-/plugin marketplace add Hongda-Zhao/bio-gene-to-reference-tree
-/plugin install bio-gene-to-reference-tree@hongda-zhao-bio-skills
-```
-
-If the installation summary requests it, run `/reload-plugins`. A plugin-installed Skill has a stable namespaced command, `/bio-gene-to-reference-tree:bio-gene-to-reference-tree ...`; the bare `/bio-gene-to-reference-tree ...` examples below apply to manual or `skills` CLI installations. See Anthropic's [plugin marketplace documentation](https://code.claude.com/docs/en/plugin-marketplaces).
-
-Invoke it directly:
-
-- Codex: `$bio-gene-to-reference-tree Classify this protein family's conservation at an explicit taxonomic scope, then build an auditable tree for accession XP_012345678.1.`
-- Cursor 2.4+: `/bio-gene-to-reference-tree Classify this protein family's conservation at an explicit taxonomic scope, then build an auditable tree for accession XP_012345678.1.` Type `/` in Agent chat to find it; press `Option+Enter` on macOS or `Alt+Enter` on Windows to keep it active as a **Custom Mode** for the session.
-- Claude Code: `/bio-gene-to-reference-tree Classify this protein family's conservation at an explicit taxonomic scope, then build an auditable tree for accession XP_012345678.1.`
-
-An agent may also load the skill automatically for requests about resolving protein accessions or sequences, classifying gene-family conservation at an explicit scope, validating species names against NCBI taxdump files, selecting phylogenetic references and outgroups, aligning and trimming proteins, inferring a FastTree/IQ-TREE tree, or generating iTOL or ggtree/ggplot2 outputs.
-
-To inspect the deterministic core without database access or bioinformatics executables, run the [offline review example](#run-the-offline-review-example).
-
-### Cursor and Claude Code locations
-
-The source directory to install is the complete `skills/bio-gene-to-reference-tree/` package, not `SKILL.md` alone; its relative links require the bundled `scripts/`, `references/`, and `assets/`. These are the native discovery locations documented by [Cursor](https://cursor.com/docs/skills) and [Claude Code](https://code.claude.com/docs/en/skills):
-
-| Client | Project-level destination | User-level destination |
-| --- | --- | --- |
-| Cursor | `.cursor/skills/bio-gene-to-reference-tree/` or `.agents/skills/bio-gene-to-reference-tree/` | `~/.cursor/skills/bio-gene-to-reference-tree/` or `~/.agents/skills/bio-gene-to-reference-tree/` |
-| Claude Code | `.claude/skills/bio-gene-to-reference-tree/` | `~/.claude/skills/bio-gene-to-reference-tree/` |
-
-Cursor's official Skills page also documents a logged-in UI route: open **Customize → Rules → Add Rule → Remote Rule (Github)** and enter `https://github.com/Hongda-Zhao/bio-gene-to-reference-tree`. Confirm the result under **Customize → Skills**; if that evolving UI does not import the nested Skill, use the CLI or complete-directory installation above. Cursor can additionally discover Claude and Codex skill directories, but the native Cursor or shared `.agents/skills/` locations are clearer for a new installation. If Cursor does not show a newly installed Skill, restart it and check **Customize → Skills** again. Claude Code watches an existing `.claude/skills/` directory live; restart it only if that top-level directory did not exist when the session began.
-
-The `skills` CLI supports Codex, Cursor, and Claude Code and reports anonymous installation telemetry by default. Set `DISABLE_TELEMETRY=1` when running it if you do not want an installation counted. Codex can still be installed manually at `~/.codex/skills/bio-gene-to-reference-tree/`. Use `.agents/skills/bio-gene-to-reference-tree/` only with Cursor or another client that explicitly supports that shared directory; a Claude Code project installation belongs in `.claude/skills/bio-gene-to-reference-tree/`.
-
-## Why this project exists
-
-Most bioinformatics skills cover one stage—fetching sequences, running BLAST, retrieving orthologs, aligning proteins, or inferring a tree. The difficult scientific handoffs remain exposed. A naive “take the top BLAST hits and build a tree” pipeline can mix paralogs, fragments, isoforms, domain-only matches, taxonomically redundant records, and an excessively distant outgroup.
-
-This skill makes every inclusion, exclusion, threshold, role, command, and approval visible. It reports a **gene tree**, never automatically a species tree.
-
-| Decision point | Common shortcut | This skill retains |
-|---|---|---|
-| Query identity | Trust a label or unversioned hit | Authoritative namespace, accession version, organism/TaxID, optional exact scientific-name evidence from one NCBI taxdump snapshot, source release, retrieval time, and sequence SHA-256 |
-| Reference curation | Keep the highest-scoring hits | Full candidate pool, orthology evidence, coverage/domain checks, balanced sampling, and deterministic rejection reasons |
-| Outgroup and rooting | Choose the most distant hit or midpoint-root automatically | Candidate rationales, taxonomic evidence, unrooted tree, and a separately approved rooted copy |
-| Alignment and trimming | Use one opaque preset | Raw MSA, QC metrics, every trim profile, retained-column fractions, and topology sensitivity |
-| Inference | Report “bootstrap” without its method | Exact model/support method, seed, tool version, argument array, and support semantics |
-| Interpretation | Put all meaning in tip labels | iTOL role files, local SVG/PDF figures plus renderer settings, complete metadata TSV, current literature/taxonomy evidence, conflicts, and limitations |
-
-## Execution boundary
-
-> **Status: v0.3 review candidate.** The Agent Skill specifies the complete workflow. Its bundled standard-library Python helpers are deliberately offline and deterministic: they validate a resolved local protein/candidate bundle, optionally validate organism/TaxID pairs against local NCBI taxdump files, select references, emit iTOL roles and metadata, and compile unexecuted MMseqs2/MAFFT/trimAl/FastTree/IQ-TREE2 plans. The local R renderer creates ggtree/ggplot2 SVG/PDF figures only when explicitly run after tree inference. Live database access, literature retrieval, and external-tool execution use separately authorized capabilities supplied by the host agent or local environment.
-
-## Workflow
-
-```text
-accession | raw protein | name + organism
-  -> authoritative query resolution
-  -> optional exact NCBI scientific-name/TaxID validation
-  -> ortholog-first or homolog-first discovery
-  -> taxonomically balanced references + candidate outgroups
-  -> optional analysis-group-aware MMseqs2 clustering
-  -> reference/outgroup approval
-  -> scale-aware conservation assessment
-  -> MAFFT + raw-MSA QC
-  -> trimAl sensitivity profiles
-  -> alignment/trimming approval
-  -> FastTree exploration or IQ-TREE2 primary inference
-  -> unrooted tree + optional approved rooted copy
-  -> iTOL roles + local ggtree/ggplot2 figure + full metadata
-  -> current phylogenetic literature/taxonomy comparison
-```
-
-The workflow supports:
-
-- `ortholog-tree` for cross-species ortholog comparison;
-- `homolog-context` for broader family/paralog placement;
-- `within-species` for strains, isolates, alleles, or close copies;
-- `sequence_context: viral` for segment-aware analyses with recombination/reassortment warnings.
-
-## Progressive documentation architecture
-
-The repository adopts the indexed, on-demand loading idea illustrated by
-[`dev-skills`](https://github.com/jamestorrevillas/dev-skills), while keeping
-this scientific workflow as **one installable Skill**. Splitting the ten stages
-into ten separately discoverable Skills would create competing commands and
-duplicate scientific rules. Here, the hierarchy is:
-
-```text
-Level 0  SKILL.md frontmatter       -> automatic discovery
-Level 1  SKILL.md + workflow.md     -> route current state and enforce gates
-Level 2  references/steps/*.md      -> execute only the current task
-Level 3  shared references/scripts  -> load or run only when the task requests it
-```
-
-`SKILL.md` links every task directly, but instructs the agent not to preload
-all of them. A resumed run checks hashes and approvals and opens the earliest
-invalid or incomplete stage.
-
-| Step | Task module | Main hand-off |
-|---:|---|---|
-| 1 | [Resolve the query](skills/bio-gene-to-reference-tree/references/steps/01-resolve-query.md) | Stable local protein, versioned when authoritative, plus provenance |
-| 2 | [Define the objective](skills/bio-gene-to-reference-tree/references/steps/02-define-objective.md) | Explicit scope, relationship policy, and deliverables |
-| 3 | [Discover candidates](skills/bio-gene-to-reference-tree/references/steps/03-discover-candidates.md) | Broad candidate FASTA/metadata with acquisition evidence |
-| 4 | [Select references and outgroups](skills/bio-gene-to-reference-tree/references/steps/04-select-references-and-outgroups.md) | Hash-bound selection proposal for Gate 2 |
-| 5 | [Cluster expanded candidates](skills/bio-gene-to-reference-tree/references/steps/05-cluster-expanded-candidates.md) | Conditional MMseqs2 mapping and re-planned references |
-| 6 | [Align and assess conservation](skills/bio-gene-to-reference-tree/references/steps/06-align-and-assess-conservation.md) | Raw protein MSA, scale-aware conservation record, and QC |
-| 7 | [Trim and test sensitivity](skills/bio-gene-to-reference-tree/references/steps/07-trim-and-test-sensitivity.md) | Approved primary alignment and exact hash |
-| 8 | [Infer, root, and check the tree](skills/bio-gene-to-reference-tree/references/steps/08-infer-root-and-check-tree.md) | Unrooted tree plus optional separately approved rooted copy |
-| 9 | [Annotate and visualize](skills/bio-gene-to-reference-tree/references/steps/09-annotate-and-visualize.md) | iTOL roles, complete metadata, and optional SVG/PDF |
-| 10 | [Compare evidence and report](skills/bio-gene-to-reference-tree/references/steps/10-compare-evidence-and-report.md) | Current-literature comparison and completion bundle |
-
-Every task file has the same operational contract: when to read it, required
-inputs, procedure, required outputs, review/stop conditions, and supporting
-references. Each task owns its stage procedure; shared references own
-cross-stage state, validation, provenance, output-format, and evidence rules.
-The homepage and router remain navigational rather than duplicating exact task
-commands.
-
-## Capability matrix
-
-| Capability | Skill instructions | Bundled helper | Host/local capability |
-|---|---:|---:|---:|
-| Classify accession/raw/name input | Yes | Validates materialized handoff | Live resolver required |
-| Exact NCBI scientific name → TaxID | Yes | Validates local `names.dmp` + `nodes.dmp` | Verified taxdump snapshot required |
-| RefSeq → UniProt/nr → profile/domain fallback | Yes | Records configured tiers | Database/search tools required |
-| Reference/outgroup selection | Yes | Deterministic | Taxonomy evidence supplied by host |
-| Scale-aware conservation assessment | Yes | Canonical TSV template; planner does not infer it | Orthology, domain, distribution, and literature evidence supplied by host |
-| Conditional MMseqs2 clustering | Yes | Plans/gates/re-imports cluster IDs | MMseqs2 execution required |
-| MAFFT and trimAl profiles | Yes | Emits exact argv arrays | Executables required |
-| FastTree or IQ-TREE2 | Yes | Emits support-aware argv arrays | Executables required |
-| iTOL role annotation | Yes | Generates `DATASET_COLORSTRIP` | Upload optional and permission-gated |
-| ggtree/ggplot2 visualization | Yes | Bundled fail-closed R renderer | R + local packages required |
-| Full sequence metadata | Yes | Generates TSV | — |
-| Recent phylogenetic evidence | Yes | Emits search plan only | Literature/taxonomy access required |
-| Network-free review bundle | Yes | Fully implemented | Python 3.10+; CI-tested on 3.10 and 3.12 |
-The bundled [three-year MSA and trimming evidence catalog](skills/bio-gene-to-reference-tree/references/recent-msa-trimming-evidence.md) links every workflow to its full Methods source and preserves exact, partial, explicit-no-trim, and not-reported states instead of guessing missing parameters. Every row also records a scale-aware conservation class, the taxonomic scope where that label applies, and its evidence basis.
-
-### Conservation-aware method routing
-
-The catalog avoids an unscoped conserved/non-conserved switch. Instead it separates deep core markers, clade-conserved markers, broadly conserved families, variable multigene families, lineage-specific or rapidly evolving families, mixed panels, and workflows where gene-level conservation is not applicable.
-
-| Approximate class | Example genes or marker types |
+| Client | Invoke after installation |
 |---|---|
-| Deep core | ribosomal proteins, translation/RNA-polymerase markers, validated bacterial/archaeal core proteins, deep single-copy panels |
-| Clade-conserved | 16S/18S/28S rDNA, lineage BUSCO/SCO sets, UCEs, Angiosperms353, COI/cytb or rbcL/matK at a suitable scale |
-| Broadly conserved family | central-metabolism enzymes, hydrogenases, aminoacyl-tRNA synthetases, cross-plant DFR homologues, vertebrate BRCA1 |
-| Variable multigene family | odorant/gustatory receptors, GT1, NPC2 and other duplicated families |
-| Lineage-specific or rapid | accessory or cluster genes, effectors, candidate LGT families, recent paralogues, highly divergent viral proteins |
-| Mixed biological panel | heterogeneous supermatrices and phylomes that still represent one biological analysis |
-| Not applicable | method benchmarks over unrelated datasets; genome-wide SNP pseudoalignments |
+| Codex | `$bio-gene-to-reference-tree ...` |
+| Cursor | `/bio-gene-to-reference-tree ...` |
+| Claude Code | `/bio-gene-to-reference-tree ...` |
 
-These are routing labels, not measured rates or claims of orthology. The same family can move between categories when the taxonomic sampling, copy-number history, domain architecture, or analysis unit changes; the Skill therefore requires `conservation_scope` and `conservation_basis` alongside `conservation_class`, recorded in a hash-bound `evidence/conservation_assessment.tsv` review artifact.
+See [detailed installation](docs/installation.md) for global commands, manual directories, Cursor discovery, Claude Marketplace installation, and telemetry settings.
 
-For the homepage BRCA1 example, the useful provisional label is `broadly-conserved-gene-family` **across the sampled vertebrates**: the reviewed records share the BRCA1 ortholog-group context and terminal RING/BRCT architecture, while the full-length proteins still contain difficult, more variable regions. It would be misleading to call BRCA1 simply “conserved” without that scope and basis.
-
-The executed BRCA1 run predates the conservation-assessment contract, so it is not retroactively presented as having a reviewed, hash-bound assessment. New runs start from the canonical [`conservation-assessment.example.tsv`](skills/bio-gene-to-reference-tree/assets/conservation-assessment.example.tsv), replace its illustrative BRCA1 row, and bind the reviewed artifact to alignment approval.
-
-## Repository layout
+Minimal example:
 
 ```text
-skills/bio-gene-to-reference-tree/
-  SKILL.md
-  agents/openai.yaml
-  references/
-    workflow.md
-    steps/
-      01-resolve-query.md
-      02-define-objective.md
-      03-discover-candidates.md
-      04-select-references-and-outgroups.md
-      05-cluster-expanded-candidates.md
-      06-align-and-assess-conservation.md
-      07-trim-and-test-sensitivity.md
-      08-infer-root-and-check-tree.md
-      09-annotate-and-visualize.md
-      10-compare-evidence-and-report.md
-    taxonomy-resolution.md
-    tool-routing.md
-    output-contract.md
-    recent-msa-trimming-evidence.md + .tsv
-    ggtree-visualization.md
-    request/plan schemas
-  scripts/
-    gene_to_tree.py
-    ncbi_taxonomy.py
-    render_tree_ggtree.R
-  assets/
-examples/brca1/
-  README.md
-  inputs/ review/ qc/ alignment/ tree/ annotation/ figures/ evidence/ report/
-.claude-plugin/marketplace.json
-tests/
-.github/workflows/validate.yml
+$bio-gene-to-reference-tree Build an auditable ortholog protein tree for human BRCA1 NP_009225.1, retain the unrooted result, and evaluate amphibian outgroups.
 ```
 
-The installable directory follows the open [Agent Skills specification](https://agentskills.io/specification). The shared `SKILL.md` frontmatter and body are the authoritative discovery and routing surface for Codex, Cursor, Claude Code, and other compatible clients; the task modules remain part of that same portable package, and no forked Cursor- or Claude-specific prompt is required. `agents/openai.yaml` adds optional Codex presentation metadata, while `.claude-plugin/marketplace.json` adds optional Claude Code distribution metadata; neither can change the scientific workflow or its review gates. The BRCA1 run stays outside the installable Skill so its executed artifacts do not consume agent context during ordinary installation. Repository-level tests enforce the portable frontmatter, complete ordered task router, nested local links and anchors, orphan-free references, progressive-disclosure limits, schemas, deterministic workflow contract, portable bundle copies at documented client paths, thin client metadata, and worked-example integrity.
+## Progressive Skill
 
-## Run the offline review example
+The installable package follows the open [Agent Skills specification](https://agentskills.io/specification) and uses progressive disclosure:
 
-Requirements: Python 3.10 or newer; the current CI matrix tests Python 3.10 and
-3.12. No third-party Python package, network connection, or bioinformatics
-executable is required.
+| Level | Loaded content |
+|---:|---|
+| 0 | `SKILL.md` name and description for discovery |
+| 1 | The compact [Skill router](skills/bio-gene-to-reference-tree/SKILL.md) and [workflow gates](skills/bio-gene-to-reference-tree/references/workflow.md) |
+| 2 | Only the current task file from `references/steps/` |
+| 3 | Shared policy, contract, evidence, guide, asset, or script only when triggered |
 
-```bash
-python3 skills/bio-gene-to-reference-tree/scripts/gene_to_tree.py plan \
-  --request skills/bio-gene-to-reference-tree/assets/request.example.json \
-  --offline \
-  --dry-run \
-  --out review-run
-```
+The ten task modules are directly addressable:
 
-The helper refuses to overwrite an existing output directory and creates:
+| Step | Task |
+|---:|---|
+| 1 | [Resolve the query](skills/bio-gene-to-reference-tree/references/steps/01-resolve-query.md) |
+| 2 | [Define the objective](skills/bio-gene-to-reference-tree/references/steps/02-define-objective.md) |
+| 3 | [Discover candidates](skills/bio-gene-to-reference-tree/references/steps/03-discover-candidates.md) |
+| 4 | [Select references and outgroups](skills/bio-gene-to-reference-tree/references/steps/04-select-references-and-outgroups.md) |
+| 5 | [Cluster expanded candidates](skills/bio-gene-to-reference-tree/references/steps/05-cluster-expanded-candidates.md) |
+| 6 | [Align and assess conservation](skills/bio-gene-to-reference-tree/references/steps/06-align-and-assess-conservation.md) |
+| 7 | [Trim and test sensitivity](skills/bio-gene-to-reference-tree/references/steps/07-trim-and-test-sensitivity.md) |
+| 8 | [Infer, root, and check the tree](skills/bio-gene-to-reference-tree/references/steps/08-infer-root-and-check-tree.md) |
+| 9 | [Annotate and visualize](skills/bio-gene-to-reference-tree/references/steps/09-annotate-and-visualize.md) |
+| 10 | [Compare evidence and report](skills/bio-gene-to-reference-tree/references/steps/10-compare-evidence-and-report.md) |
 
-- `selected_references.tsv`;
-- `rejected_references.tsv` with stable reason codes;
-- `reference_set.faa`;
-- `sequence_metadata.tsv` covering selected and rejected candidates;
-- `taxonomy_resolution.tsv` when optional local NCBI taxdump validation is enabled;
-- `itol_roles.txt` using official `DATASET_COLORSTRIP` syntax;
-- `plan.json` with two approval gates and argv arrays;
-- `manifest.json` with hashes, provenance, and zero executed network/process calls.
+The router loads one step at a time and retains review gates before reference approval, alignment choice, and tree inference.
 
-The example is synthetic and has no biological meaning. It should retain the query, mouse and chicken orthologs, and one nearby non-vertebrate chordate outgroup; it should reject an alternate mouse isoform, frog fragment, fish paralog, and surplus outgroup candidate.
+## BRCA1 example
 
-Inspect optional executables:
+![Outgroup-rooted BRCA1 protein gene tree for 18 vertebrates](examples/brca1/figures/brca1-readme.svg)
 
-```bash
-python3 skills/bio-gene-to-reference-tree/scripts/gene_to_tree.py doctor --json
-```
+The executed example starts from human RefSeq BRCA1 [`NP_009225.1`](https://www.ncbi.nlm.nih.gov/protein/NP_009225.1) and reviews a fixed 18-protein vertebrate set. It validates taxonomy and terminal RING/BRCT architecture, compares three trim profiles, and infers the primary tree with IQ-TREE2 ModelFinder plus 1,000 UFBoot2 and 1,000 SH-aLRT replicates.
 
-Run tests:
+| Result | Executed value |
+|---|---|
+| Sampling | 16 amniote ingroup proteins + 2 amphibian outgroups |
+| Taxonomy/QC | 18/18 exact scientific-name/TaxID matches; 162/162 terminal-domain checks passed |
+| Alignment | MAFFT E-INS-i; 2,179 raw columns; balanced trim retained 1,851 (84.95%) |
+| Primary tree | IQ-TREE 2.4.0; `Q.bird+F+I+R3`; 1,000 SH-aLRT + 1,000 UFBoot2 |
+| Rooting | Amphibian-rooted copy retained as a provisional display hypothesis |
 
-```bash
-python3 -m unittest discover -s tests -v
-```
+Orange marks the focal human sequence, green marks added references, and gray marks outgroups. This remains a protein gene tree; the complete audit preserves commands, versions, hashes, warnings, non-promoted attempts, and execution reconciliation outside the homepage.
 
-## Validate organism names against NCBI taxdump
+[full executed audit record](examples/brca1/README.md) ·
+[detailed audit SVG](examples/brca1/figures/gene-tree.outgroup-rooted.ggtree.svg) ·
+[detailed audit PDF](examples/brca1/figures/gene-tree.outgroup-rooted.ggtree.pdf) ·
+[unrooted Newick](examples/brca1/tree/gene-tree.unrooted.nwk) ·
+[rooted derivative](examples/brca1/tree/gene-tree.outgroup-rooted.nwk) ·
+[metadata](examples/brca1/annotation/sequence_metadata.tsv) ·
+[execution reconciliation](examples/brca1/report/execution_reconciliation.json) ·
+[50-candidate expanded review](examples/brca1-expanded/README.md)
 
-Supply already-extracted `names.dmp` and `nodes.dmp` from one verified official NCBI Taxonomy snapshot. The resolver performs character-for-character matching against `name_txt` rows whose `name class` is exactly `scientific name`; it never case-folds, trims, fuzzy-matches, accepts an alias, or chooses the first ambiguous record.
+## Quick links
 
-```bash
-python3 skills/bio-gene-to-reference-tree/scripts/ncbi_taxonomy.py \
-  --names taxonomy/names.dmp \
-  --nodes taxonomy/nodes.dmp \
-  --snapshot new_taxdump-YYYY-MM-DD \
-  --source-url https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/new_taxdump/new_taxdump.tar.gz \
-  --retrieved-at YYYY-MM-DD \
-  --input candidates.tsv \
-  --out taxonomy_resolution.tsv
-```
+| Need | Go to |
+|---|---|
+| Install on Codex, Cursor, or Claude Code | [Installation guide](docs/installation.md) |
+| Read the agent entrypoint | [Canonical `SKILL.md`](skills/bio-gene-to-reference-tree/SKILL.md) |
+| Follow states and approval gates | [Workflow](skills/bio-gene-to-reference-tree/references/workflow.md) |
+| Inspect artifacts and schemas | [Output contract](skills/bio-gene-to-reference-tree/references/output-contract.md) |
+| Resolve exact NCBI scientific names/TaxIDs | [Taxonomy policy](skills/bio-gene-to-reference-tree/references/taxonomy-resolution.md) |
+| Review recent MSA/trimming evidence | [Evidence guide](skills/bio-gene-to-reference-tree/references/recent-msa-trimming-evidence.md) |
+| Render a local tree figure | [ggtree/ggplot2 guide](skills/bio-gene-to-reference-tree/references/ggtree-visualization.md) |
+| Review privacy boundaries | [Privacy policy](PRIVACY.md) |
+| Reuse or inspect the worked example | [BRCA1 audit](examples/brca1/README.md) |
 
-The local resolver downloads nothing. It stops on no exact scientific-name match, ambiguity, malformed dump records, a missing node, or disagreement between the resolved and supplied TaxID. Enable the optional `taxonomy` object in a planning request to include the dump hashes and resolution table in the review bundle and its decision-bearing plan hash.
-
-## Render a local ggtree/ggplot2 figure
-
-After tree inference and topology review, render the approved Newick file locally:
-
-```bash
-Rscript skills/bio-gene-to-reference-tree/scripts/render_tree_ggtree.R \
-  --tree tree/gene-tree.unrooted.treefile \
-  --metadata annotation/sequence_metadata.tsv \
-  --itol-roles annotation/itol_roles.txt \
-  --out-prefix figures/gene-tree.unrooted.ggtree \
-  --root-state unrooted \
-  --layout rectangular \
-  --branch-length auto \
-  --support-format sh-alrt/ufboot \
-  --show-tip-labels true \
-  --width 10 --height 8
-```
-
-The renderer requires local `ape`, `ggplot2`, `ggtree`, `openssl`, and `svglite` packages. It never installs packages, opens a network connection, reroots or ladderizes the tree, or guesses support semantics. It requires exact equality between Newick tips and selected metadata tip IDs; an `outgroup-rooted` declaration also requires a structural root split that isolates the selected outgroup tips. It refuses overwrite and writes SVG, PDF, and a settings TSV.
-
-## Optional local tools
-
-| Stage | Executable | Notes |
-|---|---|---|
-| Large candidate pools | `mmseqs` | Both `--min-seq-id` and `-c` are required |
-| Protein MSA | `mafft` | Auto, L-INS-i, G-INS-i, and E-INS-i plans |
-| Trimming sensitivity | `trimal` | Raw alignment is always preserved |
-| Fast exploration | `FastTree` | SH-like local support is not bootstrap |
-| Primary ML inference | `iqtree2` | UFBoot `-B` and standard bootstrap `-b` are distinct |
-| Local tree figure | `Rscript` | Requires `ape`, `ggplot2`, `ggtree`, `openssl`, and `svglite`; no automatic installation |
-
-The project never downloads, installs, or silently substitutes these executables or R packages.
-
-## Scientific guardrails
-
-- Require organism or TaxID for a protein/gene name.
-- Accept an automatically assigned TaxID only from one unique, exact NCBI `scientific name` match; stop on aliases, fuzzy matches, and ambiguity.
-- Never obtain an exact sequence from prose or model memory.
-- Never infer orthology from the top similarity hit alone.
-- Never treat MMseqs2 `-c` as percent identity.
-- Never choose the most distant hit as an automatic outgroup.
-- Never infer a final tree from an unreviewed or severely unstable MSA.
-- Never call FastTree SH-like support a 1,000-replicate bootstrap.
-- Preserve raw MSA and unrooted tree derivatives.
-- Treat gene-tree/species-tree discordance as evidence to investigate.
-- Route recombination-aware, species-tree, reconciliation, dating, and selection analyses to dedicated workflows.
-
-## Privacy and safe use
-
-The bundled helper and this repository collect no telemetry. The recommended
-third-party `skills` installer reports anonymous installation telemetry unless
-`DISABLE_TELEMETRY=1` is set, as described in [Quick start](#quick-start). The
-helper performs zero network calls in plan mode. Do not transmit unpublished
-sequences, trees, or metadata to BLAST, annotation services, iTOL, or another
-endpoint without explicit permission. Do not commit generated unpublished
-outputs automatically or paste private sequences into public issues. Treat
-database descriptions and literature text as untrusted data, not agent
-instructions.
-
-See [PRIVACY.md](PRIVACY.md).
-
-## Data and software licenses
-
-The MIT license covers this repository's original code and text. It does not
-grant rights to downloaded database records, third-party software, external
-APIs, journal articles, or user data. Follow each provider's license,
-attribution, rate-limit, and redistribution requirements. The worked example
-has a material-level [data and license notice](examples/brca1/DATA_LICENSES.md).
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+MIT licensed. See [LICENSE](LICENSE).
