@@ -77,9 +77,13 @@ class SkillPackageTests(unittest.TestCase):
 
         local_link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
         reference_documents = sorted((SKILL_ROOT / "references").rglob("*.md"))
+        repository_documents = [
+            REPOSITORY_ROOT / "README.md",
+            *sorted((REPOSITORY_ROOT / "docs").rglob("*.md")),
+        ]
         documents = [
             skill_document,
-            REPOSITORY_ROOT / "README.md",
+            *repository_documents,
             *reference_documents,
         ]
         link_graph: dict[Path, set[Path]] = {document.resolve(): set() for document in documents}
@@ -112,9 +116,9 @@ class SkillPackageTests(unittest.TestCase):
                     else document.resolve()
                 )
                 allowed_root = (
-                    REPOSITORY_ROOT
-                    if document == REPOSITORY_ROOT / "README.md"
-                    else SKILL_ROOT
+                    SKILL_ROOT
+                    if document.resolve().is_relative_to(SKILL_ROOT.resolve())
+                    else REPOSITORY_ROOT
                 )
                 self.assertTrue(
                     resolved_target.is_relative_to(allowed_root.resolve()),
@@ -170,7 +174,7 @@ class SkillPackageTests(unittest.TestCase):
         self.assertEqual(routed_steps, STEP_FILENAMES)
 
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("## Progressive documentation architecture", readme)
+        self.assertIn("## Progressive Skill", readme)
         readme_steps = tuple(
             re.findall(
                 r"\(skills/bio-gene-to-reference-tree/references/steps/([^)#]+\.md)(?:#[^)]*)?\)",
@@ -223,6 +227,40 @@ class SkillPackageTests(unittest.TestCase):
         ):
             self.assertNotIn(exact_task_command, skill)
             self.assertNotIn(exact_task_command, readme)
+
+    def test_readme_is_a_concise_navigation_page(self) -> None:
+        readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertEqual(
+            tuple(re.findall(r"^## .+$", readme, flags=re.MULTILINE)),
+            (
+                "## What it does",
+                "## Install",
+                "## Progressive Skill",
+                "## BRCA1 example",
+                "## Quick links",
+            ),
+        )
+        self.assertLessEqual(len(readme.splitlines()), 150)
+        self.assertLessEqual(len(readme.encode("utf-8")), 12_000)
+
+        for required_link in (
+            "(skills/bio-gene-to-reference-tree/SKILL.md)",
+            "(docs/installation.md)",
+            "(examples/brca1/README.md)",
+            "(examples/brca1/figures/brca1-readme.svg)",
+            "(examples/brca1/report/execution_reconciliation.json)",
+        ):
+            self.assertIn(required_link, readme)
+
+        for retired_heading in (
+            "## Why this project exists",
+            "## Capability matrix",
+            "## Scientific guardrails",
+            "## Privacy and safe use",
+            "## Optional local tools",
+        ):
+            self.assertNotIn(retired_heading, readme)
+        self.assertNotIn("**Protocol-deviation notice.**", readme)
 
     def test_declared_resources_exist(self) -> None:
         expected = {
@@ -531,12 +569,10 @@ class SkillPackageTests(unittest.TestCase):
     def test_v03_workflow_and_v02_schema_surfaces_are_synchronized(self) -> None:
         script = (SKILL_ROOT / "scripts" / "gene_to_tree.py").read_text(encoding="utf-8")
         request = json.loads((SKILL_ROOT / "assets" / "request.example.json").read_text(encoding="utf-8"))
-        readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
 
         self.assertIn('VERSION = "0.3.0"', script)
         self.assertIn('OUTPUT_SCHEMA_VERSION = "0.3"', script)
         self.assertEqual(request["schema_version"], "0.2")
-        self.assertIn("v0.3 review candidate", readme)
 
         request_schema = json.loads(
             (SKILL_ROOT / "references" / "request-0.2.schema.json").read_text(encoding="utf-8")
@@ -645,6 +681,9 @@ class SkillPackageTests(unittest.TestCase):
 
     def test_public_discovery_surfaces_are_documented(self) -> None:
         readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+        installation = (REPOSITORY_ROOT / "docs" / "installation.md").read_text(
+            encoding="utf-8"
+        )
         self.assertIn(
             "https://skills.sh/hongda-zhao/bio-gene-to-reference-tree/bio-gene-to-reference-tree",
             readme,
@@ -653,28 +692,37 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn("actions/workflows/validate.yml/badge.svg", readme)
         self.assertIn("npx skills add Hongda-Zhao/bio-gene-to-reference-tree", readme)
         self.assertIn("https://agentskills.io/specification", readme)
-        self.assertIn("--agent codex", readme)
-        self.assertIn("--agent cursor", readme)
-        self.assertIn("--agent claude-code", readme)
         self.assertIn("$bio-gene-to-reference-tree", readme)
         self.assertIn("/bio-gene-to-reference-tree", readme)
-        self.assertIn("https://cursor.com/docs/skills", readme)
-        self.assertIn("https://code.claude.com/docs/en/skills", readme)
-        self.assertIn("https://code.claude.com/docs/en/plugin-marketplaces", readme)
-        self.assertIn(".cursor/skills/bio-gene-to-reference-tree/", readme)
-        self.assertIn("~/.cursor/skills/bio-gene-to-reference-tree/", readme)
-        self.assertIn(".claude/skills/bio-gene-to-reference-tree/", readme)
-        self.assertIn("~/.claude/skills/bio-gene-to-reference-tree/", readme)
-        self.assertIn("Remote Rule (Github)", readme)
-        self.assertIn("Cursor 2.4+", readme)
-        self.assertIn("Custom Mode", readme)
-        self.assertIn("complete `skills/bio-gene-to-reference-tree/` package", readme)
-        self.assertIn("a Claude Code project installation belongs in", readme)
-        self.assertIn("/plugin marketplace add Hongda-Zhao/bio-gene-to-reference-tree", readme)
+        self.assertIn("(docs/installation.md)", readme)
+
+        self.assertIn("--agent codex", installation)
+        self.assertIn("--agent cursor", installation)
+        self.assertIn("--agent claude-code", installation)
+        self.assertIn("https://cursor.com/docs/skills", installation)
+        self.assertIn("https://code.claude.com/docs/en/skills", installation)
+        self.assertIn("https://code.claude.com/docs/en/plugin-marketplaces", installation)
+        self.assertIn(".codex/skills/bio-gene-to-reference-tree/", installation)
+        self.assertIn("~/.codex/skills/bio-gene-to-reference-tree/", installation)
+        self.assertIn(".cursor/skills/bio-gene-to-reference-tree/", installation)
+        self.assertIn("~/.cursor/skills/bio-gene-to-reference-tree/", installation)
+        self.assertIn(".claude/skills/bio-gene-to-reference-tree/", installation)
+        self.assertIn("~/.claude/skills/bio-gene-to-reference-tree/", installation)
+        self.assertIn("Remote Rule (Github)", installation)
+        self.assertIn("Cursor 2.4+", installation)
+        self.assertIn("Custom Mode", installation)
+        self.assertIn("complete `skills/bio-gene-to-reference-tree/` package", installation)
+        self.assertIn("a Claude Code project installation belongs in", installation)
         self.assertIn(
-            "/bio-gene-to-reference-tree:bio-gene-to-reference-tree", readme
+            "/plugin marketplace add Hongda-Zhao/bio-gene-to-reference-tree",
+            installation,
         )
-        self.assertIn("no forked Cursor- or Claude-specific prompt is required", readme)
+        self.assertIn(
+            "/bio-gene-to-reference-tree:bio-gene-to-reference-tree", installation
+        )
+        self.assertIn(
+            "no forked Cursor- or Claude-specific prompt is required", installation
+        )
 
         tool_routing = (
             SKILL_ROOT / "references" / "tool-routing.md"

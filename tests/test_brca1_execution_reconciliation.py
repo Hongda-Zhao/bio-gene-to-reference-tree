@@ -314,8 +314,14 @@ class Brca1ExecutionReconciliationTests(unittest.TestCase):
         self.assertIn("non-promoted", ledger_attempt["execution_outcome"])
 
     def test_public_narrative_discloses_deviation_without_equivalence_claim(self) -> None:
+        homepage = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("(examples/brca1/README.md)", homepage)
+        self.assertIn(
+            "(examples/brca1/report/execution_reconciliation.json)", homepage
+        )
+        self.assertNotIn("**Protocol-deviation notice.**", homepage)
+
         documents = (
-            REPOSITORY_ROOT / "README.md",
             EXAMPLE / "README.md",
             EXAMPLE / "PROVENANCE.md",
             EXAMPLE / "report" / "report.md",
