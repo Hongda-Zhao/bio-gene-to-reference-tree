@@ -16,6 +16,7 @@ import hashlib
 import json
 import math
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -36,6 +37,9 @@ from ncbi_taxonomy import (
 
 VERSION = "0.3.0"
 OUTPUT_SCHEMA_VERSION = "0.3"
+ENVIRONMENT_PROFILE_SCHEMA_VERSION = "0.1"
+ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION = "0.1"
+ROUTE_DECISION_SCHEMA_VERSION = "0.1"
 PROTEIN_ALPHABET = frozenset("ACDEFGHIKLMNPQRSTVWYBXZJUO")
 SAFE_ID = re.compile(r"^[A-Za-z0-9_.:-]+$")
 SAFE_PROFILE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -2246,52 +2250,1572 @@ def run_plan(args: argparse.Namespace) -> int:
     return 3 if all_blockers else 0
 
 
-def run_doctor(args: argparse.Namespace) -> int:
-    probes = {
-        "mmseqs2": ["mmseqs", "version"],
-        "mafft": ["mafft", "--version"],
-        "trimal": ["trimal", "--version"],
-        "fasttree": ["FastTree", "-help"],
-        "iqtree2": ["iqtree2", "--version"],
-        "rscript": ["Rscript", "--version"],
-    }
-    results: Dict[str, Dict[str, Any]] = {}
-    for name, argv in probes.items():
-        executable = shutil.which(argv[0])
-        if executable is None:
-            results[name] = {"status": "missing", "executable": None, "version": None}
-            continue
-        version: str | None = None
-        status = "available"
-        try:
-            completed = subprocess.run(
-                [executable, *argv[1:]],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-            rendered = (completed.stdout or completed.stderr).strip().splitlines()
-            version = rendered[0][:300] if rendered else None
-            if completed.returncode not in {0, 1}:
-                status = "probe-failed"
-        except (OSError, subprocess.SubprocessError) as exc:
-            status = "probe-failed"
-            version = str(exc)
-        results[name] = {
-            "status": status,
+LOCAL_TOOL_PROBES: Mapping[str, Sequence[str]] = {
+    "ncbi-datasets": ("datasets", "version"),
+    "blastp": ("blastp", "-version"),
+    "interproscan": ("interproscan.sh", "--version"),
+    "jackhmmer": ("jackhmmer", "-h"),
+    "hhsearch": ("hhsearch", "-h"),
+    "foldseek": ("foldseek", "version"),
+    "mmseqs2": ("mmseqs", "version"),
+    "mafft": ("mafft", "--version"),
+    "trimal": ("trimal", "--version"),
+    "fasttree": ("FastTree", "-help"),
+    "iqtree2": ("iqtree2", "--version"),
+    "iqtree3": ("iqtree3", "--version"),
+    "iqtree": ("iqtree", "--version"),
+    "rscript": ("Rscript", "--version"),
+}
+EXECUTOR_PROBES: Mapping[str, Sequence[str]] = {
+    "ssh": ("ssh", "-V"),
+    "slurm": ("sbatch", "--version"),
+    "pbs": ("qsub", "--version"),
+    "lsf": ("bsub", "-V"),
+}
+REQUIRED_GGTREE_PACKAGES = ("ape", "ggplot2", "ggtree", "openssl", "svglite")
+AVAILABLE_PROBE_STATUS = "available"
+PRIVATE_PATH_PATTERN = re.compile(
+    r"(^|\s)(/[A-Za-z0-9_.-]+(?:/[^\s]+)+|[A-Za-z]:[\\/][^\s]+)"
+)
+SAFE_VERSION_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9])v?(\d+(?:\.\d+){1,3}(?:[-+._][A-Za-z0-9]+)?)",
+    re.IGNORECASE,
+)
+SAFE_STORED_VERSION_PATTERN = re.compile(
+    r"^\d+(?:\.\d+){1,3}(?:[-+._][A-Za-z0-9]+)?$"
+)
+PROBE_SIGNATURES: Mapping[str, str] = {
+    "ncbi-datasets": r"datasets|ncbi",
+    "blastp": r"blastp",
+    "interproscan": r"interproscan",
+    "jackhmmer": r"jackhmmer|hmmer",
+    "hhsearch": r"hhsearch|hh-suite|hhsuite",
+    "foldseek": r"foldseek",
+    "mmseqs2": r"mmseqs",
+    "mafft": r"mafft",
+    "trimal": r"trimal",
+    "fasttree": r"fasttree",
+    "iqtree2": r"iq-tree|iqtree",
+    "iqtree3": r"iq-tree|iqtree",
+    "iqtree": r"iq-tree|iqtree",
+    "rscript": r"rscript|r version",
+    "ssh": r"ssh|openssh",
+    "slurm": r"slurm|sbatch",
+    "pbs": r"pbs|qsub|torque",
+    "lsf": r"lsf|bsub",
+}
+
+
+def safe_version_token(output: str) -> str | None:
+    """Return only a portable version token, never arbitrary command output."""
+    match = SAFE_VERSION_PATTERN.search(output)
+    return match.group(1)[:64] if match else None
+
+
+def probe_command(
+    name: str,
+    argv: Sequence[str],
+    *,
+    execute: bool,
+    timeout: int = 5,
+) -> Dict[str, Any]:
+    executable = shutil.which(argv[0])
+    if executable is None:
+        return {"status": "missing", "executable": None, "version": None}
+    if not execute:
+        return {
+            "status": AVAILABLE_PROBE_STATUS,
             "executable": Path(executable).name,
-            "version": version,
+            "version": None,
         }
-    payload = {"workflow_version": VERSION, "tools": results}
-    print(json.dumps(payload, indent=None if args.json else 2, sort_keys=True))
+    status = AVAILABLE_PROBE_STATUS
+    version: str | None = None
+    try:
+        completed = subprocess.run(
+            [executable, *argv[1:]],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        rendered = "\n".join(
+            part for part in (completed.stdout, completed.stderr) if part
+        ).strip()
+        allowed_return_codes = {0, 1} if name == "fasttree" else {0}
+        signature = PROBE_SIGNATURES.get(name)
+        signature_matches = bool(
+            signature and re.search(signature, rendered, flags=re.IGNORECASE)
+        )
+        if completed.returncode not in allowed_return_codes or not signature_matches:
+            status = "probe-failed"
+            version = None
+        else:
+            version = safe_version_token(rendered)
+    except (OSError, subprocess.SubprocessError):
+        status = "probe-failed"
+        version = None
+    return {
+        "status": status,
+        "executable": Path(executable).name,
+        "version": version,
+    }
+
+
+def physical_memory_gb() -> float | None:
+    try:
+        page_size = int(os.sysconf("SC_PAGE_SIZE"))
+        page_count = int(os.sysconf("SC_PHYS_PAGES"))
+    except (AttributeError, OSError, TypeError, ValueError):
+        return None
+    if page_size <= 0 or page_count <= 0:
+        return None
+    return round((page_size * page_count) / (1024**3), 2)
+
+
+def probe_r_packages(
+    rscript_probe: Mapping[str, Any], *, execute: bool
+) -> Dict[str, Dict[str, Any]]:
+    if not execute:
+        return {
+            package: {"status": "unknown", "version": None}
+            for package in REQUIRED_GGTREE_PACKAGES
+        }
+    if rscript_probe.get("status") != AVAILABLE_PROBE_STATUS:
+        status = "missing" if rscript_probe.get("status") == "missing" else "unknown"
+        return {
+            package: {"status": status, "version": None}
+            for package in REQUIRED_GGTREE_PACKAGES
+        }
+    executable = shutil.which("Rscript")
+    if executable is None:
+        return {
+            package: {"status": "missing", "version": None}
+            for package in REQUIRED_GGTREE_PACKAGES
+        }
+    expression = (
+        'packages <- c("ape","ggplot2","ggtree","openssl","svglite"); '
+        'for (p in packages) { if (requireNamespace(p, quietly=TRUE)) '
+        'cat(p, "\\tavailable\\t", as.character(packageVersion(p)), "\\n", sep="") '
+        'else cat(p, "\\tmissing\\t\\n", sep="") }'
+    )
+    results = {
+        package: {"status": "unknown", "version": None}
+        for package in REQUIRED_GGTREE_PACKAGES
+    }
+    try:
+        completed = subprocess.run(
+            [executable, "--vanilla", "-e", expression],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return results
+    if completed.returncode != 0:
+        return results
+    for line in completed.stdout.splitlines():
+        fields = line.rstrip("\n").split("\t")
+        if len(fields) < 2 or fields[0] not in results:
+            continue
+        results[fields[0]] = {
+            "status": fields[1] if fields[1] in {"available", "missing"} else "unknown",
+            "version": (
+                safe_version_token(fields[2])
+                if len(fields) > 2 and fields[2]
+                else None
+            ),
+        }
+    return results
+
+
+def collect_environment_snapshot(
+    environment_id: str,
+    environment_kind: str,
+    *,
+    run_version_probes: bool = False,
+) -> Dict[str, Any]:
+    if not SAFE_PROFILE_ID.fullmatch(environment_id):
+        raise WorkflowError(
+            "INVALID_ENVIRONMENT_ID",
+            "Environment ID must contain only letters, digits, underscores, or hyphens.",
+        )
+    tools = {
+        name: probe_command(name, argv, execute=run_version_probes)
+        for name, argv in LOCAL_TOOL_PROBES.items()
+    }
+    executors = {
+        name: probe_command(name, argv, execute=run_version_probes)
+        for name, argv in EXECUTOR_PROBES.items()
+    }
+    try:
+        scratch_free_gb: float | None = round(
+            shutil.disk_usage(tempfile.gettempdir()).free / (1024**3), 2
+        )
+    except OSError:
+        scratch_free_gb = None
+    return {
+        "schema_version": ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION,
+        "workflow_version": VERSION,
+        "environment_id": environment_id,
+        "environment_kind": environment_kind,
+        "probe_scope": "current-process-environment",
+        "probe_mode": "version-command" if run_version_probes else "path-only",
+        "network": "not-probed",
+        "environment": {
+            "operating_system": platform.system() or "unknown",
+            "architecture": platform.machine() or "unknown",
+            "python_version": platform.python_version(),
+            "cpu_count": os.cpu_count(),
+            "memory_gb": physical_memory_gb(),
+            "scratch_free_gb": scratch_free_gb,
+        },
+        "tools": tools,
+        "r_packages": probe_r_packages(
+            tools["rscript"], execute=run_version_probes
+        ),
+        "executors": executors,
+    }
+
+
+def read_json_document(path: Path, code: str, label: str) -> Dict[str, Any]:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise WorkflowError(code, f"Cannot read {label} {path}: {exc}") from exc
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise WorkflowError(
+            code,
+            f"{label} is not valid JSON at line {exc.lineno}, column {exc.colno}: {exc.msg}",
+        ) from exc
+    if not isinstance(value, dict):
+        raise WorkflowError(code, f"{label} root must be a JSON object.")
+    return value
+
+
+def emit_json_document(
+    payload: Mapping[str, Any],
+    *,
+    output: str | None,
+    compact: bool,
+    label: str,
+) -> None:
+    rendered = json.dumps(
+        payload,
+        indent=None if compact else 2,
+        sort_keys=True,
+        ensure_ascii=False,
+    ) + "\n"
+    if output is None:
+        sys.stdout.write(rendered)
+        return
+    output_path = Path(output).expanduser()
+    if output_path.exists():
+        raise WorkflowError("OUTPUT_EXISTS", f"Refusing to overwrite existing {label}: {output}")
+    if not output_path.parent.is_dir():
+        raise WorkflowError(
+            "OUTPUT_PARENT_MISSING",
+            f"Parent directory for {label} does not exist: {output_path.parent}",
+        )
+    try:
+        with output_path.open("x", encoding="utf-8", newline="\n") as handle:
+            handle.write(rendered)
+    except OSError as exc:
+        raise WorkflowError("OUTPUT_WRITE_ERROR", f"Cannot write {label} {output}: {exc}") from exc
+    print(json.dumps({"output": output, "schema_version": payload.get("schema_version")}, sort_keys=True))
+
+
+def normalize_environment_profile(raw: Mapping[str, Any]) -> Dict[str, Any]:
+    code = "INVALID_ENVIRONMENT_PROFILE"
+
+    def fail(message: str) -> None:
+        raise WorkflowError(code, message)
+
+    def exact_keys(value: Mapping[str, Any], allowed: set[str], label: str) -> None:
+        unknown = sorted(set(value) - allowed)
+        if unknown:
+            fail(f"{label} contains unsupported fields: {', '.join(unknown)}")
+
+    def object_at(value: Mapping[str, Any], key: str, label: str) -> Mapping[str, Any]:
+        child = value.get(key)
+        if not isinstance(child, dict):
+            fail(f"{label}.{key} must be an object.")
+        return child
+
+    def text_at(
+        value: Mapping[str, Any], key: str, label: str, choices: set[str] | None = None
+    ) -> str:
+        child = value.get(key)
+        if not isinstance(child, str) or not child.strip():
+            fail(f"{label}.{key} must be a non-empty string.")
+        normalized = child.strip()
+        if choices is not None and normalized not in choices:
+            fail(f"{label}.{key} must be one of: {', '.join(sorted(choices))}.")
+        return normalized
+
+    def flag_at(value: Mapping[str, Any], key: str, label: str) -> bool:
+        child = value.get(key)
+        if not isinstance(child, bool):
+            fail(f"{label}.{key} must be true or false.")
+        return child
+
+    exact_keys(
+        raw,
+        {
+            "schema_version",
+            "profile_id",
+            "intent",
+            "inputs",
+            "capabilities",
+            "permissions",
+            "compute",
+            "requirements",
+        },
+        "profile",
+    )
+    if raw.get("schema_version") != ENVIRONMENT_PROFILE_SCHEMA_VERSION:
+        fail(f"schema_version must be '{ENVIRONMENT_PROFILE_SCHEMA_VERSION}'.")
+    profile_id = text_at(raw, "profile_id", "profile")
+    if not SAFE_PROFILE_ID.fullmatch(profile_id):
+        fail("profile.profile_id contains unsupported characters.")
+    intent = text_at(
+        raw,
+        "intent",
+        "profile",
+        {"planning", "quick", "accurate", "auto", "visualization"},
+    )
+
+    inputs = object_at(raw, "inputs", "profile")
+    exact_keys(
+        inputs,
+        {
+            "query_kind",
+            "query_resolved",
+            "query_location",
+            "candidates_location",
+            "cluster_mapping_location",
+            "alignment_location",
+            "tree_location",
+            "tree_root_state",
+            "metadata_location",
+            "candidate_count",
+            "taxdump_location",
+            "sequence_database_location",
+            "sequence_database_format",
+            "cached_literature",
+        },
+        "inputs",
+    )
+    candidate_count = inputs.get("candidate_count")
+    if candidate_count is not None and (
+        isinstance(candidate_count, bool)
+        or not isinstance(candidate_count, int)
+        or candidate_count < 0
+    ):
+        fail("inputs.candidate_count must be null or an integer >= 0.")
+    location_choices = {"absent", "host", "compute-target", "both"}
+    normalized_inputs = {
+        "query_kind": text_at(
+            inputs,
+            "query_kind",
+            "inputs",
+            {"accession-or-name", "public-sequence", "unpublished-sequence"},
+        ),
+        "query_resolved": flag_at(inputs, "query_resolved", "inputs"),
+        "query_location": text_at(
+            inputs, "query_location", "inputs", location_choices
+        ),
+        "candidates_location": text_at(
+            inputs, "candidates_location", "inputs", location_choices
+        ),
+        "cluster_mapping_location": text_at(
+            inputs, "cluster_mapping_location", "inputs", location_choices
+        ),
+        "alignment_location": text_at(
+            inputs, "alignment_location", "inputs", location_choices
+        ),
+        "tree_location": text_at(
+            inputs, "tree_location", "inputs", location_choices
+        ),
+        "tree_root_state": text_at(
+            inputs, "tree_root_state", "inputs", {"none", "unrooted", "rooted"}
+        ),
+        "metadata_location": text_at(
+            inputs, "metadata_location", "inputs", location_choices
+        ),
+        "candidate_count": candidate_count,
+        "taxdump_location": text_at(
+            inputs, "taxdump_location", "inputs", location_choices
+        ),
+        "sequence_database_location": text_at(
+            inputs, "sequence_database_location", "inputs", location_choices
+        ),
+        "sequence_database_format": text_at(
+            inputs,
+            "sequence_database_format",
+            "inputs",
+            {"none", "blast", "mmseqs2", "both"},
+        ),
+        "cached_literature": flag_at(inputs, "cached_literature", "inputs"),
+    }
+    if normalized_inputs["query_resolved"] and normalized_inputs["query_location"] == "absent":
+        fail("inputs.query_resolved=true requires a non-absent query_location.")
+    if (normalized_inputs["tree_location"] == "absent") != (
+        normalized_inputs["tree_root_state"] == "none"
+    ):
+        fail("tree_location must be absent exactly when tree_root_state is none.")
+    if (normalized_inputs["sequence_database_location"] == "absent") != (
+        normalized_inputs["sequence_database_format"] == "none"
+    ):
+        fail(
+            "sequence_database_location must be absent exactly when sequence_database_format is none."
+        )
+
+    capabilities = object_at(raw, "capabilities", "profile")
+    capability_keys = {
+        "compute_shell",
+        "host_shell",
+        "database_lookup",
+        "literature_search",
+        "file_transfer",
+        "compute_tree_io",
+        "host_tree_io",
+        "web_upload",
+    }
+    exact_keys(capabilities, capability_keys, "capabilities")
+    normalized_capabilities = {
+        key: flag_at(capabilities, key, "capabilities") for key in sorted(capability_keys)
+    }
+
+    permissions = object_at(raw, "permissions", "profile")
+    permission_keys = {
+        "public_database_network",
+        "remote_sequence_submission",
+        "literature_network",
+        "itol_upload",
+    }
+    exact_keys(permissions, permission_keys, "permissions")
+    normalized_permissions = {
+        key: flag_at(permissions, key, "permissions") for key in sorted(permission_keys)
+    }
+
+    compute = object_at(raw, "compute", "profile")
+    exact_keys(compute, {"target", "scheduler", "threads", "memory_gb"}, "compute")
+    threads = compute.get("threads")
+    if isinstance(threads, bool) or not isinstance(threads, int) or threads < 1:
+        fail("compute.threads must be an integer >= 1.")
+    memory_gb = compute.get("memory_gb")
+    if memory_gb is not None and (
+        isinstance(memory_gb, bool)
+        or not isinstance(memory_gb, (int, float))
+        or not math.isfinite(float(memory_gb))
+        or float(memory_gb) <= 0
+    ):
+        fail("compute.memory_gb must be null or a finite number > 0.")
+    normalized_compute = {
+        "target": text_at(
+            compute, "target", "compute", {"local", "hpc", "ssh", "host-only"}
+        ),
+        "scheduler": text_at(
+            compute, "scheduler", "compute", {"none", "pbs", "slurm", "lsf", "other"}
+        ),
+        "threads": threads,
+        "memory_gb": float(memory_gb) if memory_gb is not None else None,
+    }
+    if normalized_compute["target"] != "hpc" and normalized_compute["scheduler"] != "none":
+        fail("compute.scheduler must be 'none' unless compute.target is 'hpc'.")
+
+    requirements = object_at(raw, "requirements", "profile")
+    requirement_keys = {
+        "trimming",
+        "exact_taxonomy",
+        "rooted_tree",
+        "visualization",
+        "current_literature",
+        "report",
+        "clustering_trigger",
+    }
+    exact_keys(requirements, requirement_keys, "requirements")
+    clustering_trigger = requirements.get("clustering_trigger")
+    if (
+        isinstance(clustering_trigger, bool)
+        or not isinstance(clustering_trigger, int)
+        or clustering_trigger < 1
+    ):
+        fail("requirements.clustering_trigger must be an integer >= 1.")
+    normalized_requirements = {
+        "trimming": flag_at(requirements, "trimming", "requirements"),
+        "exact_taxonomy": flag_at(requirements, "exact_taxonomy", "requirements"),
+        "rooted_tree": flag_at(requirements, "rooted_tree", "requirements"),
+        "visualization": text_at(
+            requirements,
+            "visualization",
+            "requirements",
+            {"none", "local", "itol", "either"},
+        ),
+        "current_literature": flag_at(
+            requirements, "current_literature", "requirements"
+        ),
+        "report": flag_at(requirements, "report", "requirements"),
+        "clustering_trigger": clustering_trigger,
+    }
+    return {
+        "schema_version": ENVIRONMENT_PROFILE_SCHEMA_VERSION,
+        "profile_id": profile_id,
+        "intent": intent,
+        "inputs": normalized_inputs,
+        "capabilities": normalized_capabilities,
+        "permissions": normalized_permissions,
+        "compute": normalized_compute,
+        "requirements": normalized_requirements,
+    }
+
+
+def normalize_environment_snapshot(raw: Mapping[str, Any]) -> Dict[str, Any]:
+    code = "INVALID_ENVIRONMENT_SNAPSHOT"
+
+    def fail(message: str) -> None:
+        raise WorkflowError(code, message)
+
+    allowed_top = {
+        "schema_version",
+        "workflow_version",
+        "environment_id",
+        "environment_kind",
+        "probe_scope",
+        "probe_mode",
+        "network",
+        "environment",
+        "tools",
+        "r_packages",
+        "executors",
+    }
+    unknown_top = sorted(set(raw) - allowed_top)
+    if unknown_top:
+        fail(f"Snapshot contains unsupported fields: {', '.join(unknown_top)}")
+    if raw.get("schema_version") != ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION:
+        fail(f"schema_version must be '{ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION}'.")
+    workflow_version = raw.get("workflow_version")
+    if not isinstance(workflow_version, str) or not re.fullmatch(
+        r"[0-9]+\.[0-9]+\.[0-9]+", workflow_version
+    ):
+        fail("workflow_version must be a semantic x.y.z version.")
+    environment_id = raw.get("environment_id")
+    if not isinstance(environment_id, str) or not SAFE_PROFILE_ID.fullmatch(environment_id):
+        fail("environment_id is invalid.")
+    environment_kind = raw.get("environment_kind")
+    if environment_kind not in {"local", "hpc", "ssh", "host-only"}:
+        fail("environment_kind is invalid.")
+    if raw.get("probe_scope") != "current-process-environment":
+        fail("probe_scope must be 'current-process-environment'.")
+    probe_mode = raw.get("probe_mode")
+    if probe_mode not in {"path-only", "version-command"}:
+        fail("probe_mode must be 'path-only' or 'version-command'.")
+    if raw.get("network") != "not-probed":
+        fail("network must remain 'not-probed'; declare network capability in the profile.")
+
+    environment = raw.get("environment")
+    if not isinstance(environment, dict):
+        fail("environment must be an object.")
+    environment_keys = {
+        "operating_system",
+        "architecture",
+        "python_version",
+        "cpu_count",
+        "memory_gb",
+        "scratch_free_gb",
+    }
+    unknown_environment = sorted(set(environment) - environment_keys)
+    missing_environment = sorted(environment_keys - set(environment))
+    if unknown_environment or missing_environment:
+        detail = []
+        if unknown_environment:
+            detail.append(f"unsupported: {', '.join(unknown_environment)}")
+        if missing_environment:
+            detail.append(f"missing: {', '.join(missing_environment)}")
+        fail("environment fields are invalid (" + "; ".join(detail) + ").")
+    for key in ("operating_system", "architecture"):
+        if (
+            not isinstance(environment[key], str)
+            or not environment[key]
+            or len(environment[key]) > 100
+        ):
+            fail(f"environment.{key} must be a non-empty string.")
+    if not isinstance(environment["python_version"], str) or not re.fullmatch(
+        r"[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:[A-Za-z][A-Za-z0-9.+-]*)?",
+        environment["python_version"],
+    ):
+        fail("environment.python_version must be a numeric Python version.")
+    cpu_count = environment["cpu_count"]
+    if cpu_count is not None and (
+        isinstance(cpu_count, bool) or not isinstance(cpu_count, int) or cpu_count < 1
+    ):
+        fail("environment.cpu_count must be null or an integer >= 1.")
+    for key in ("memory_gb", "scratch_free_gb"):
+        value = environment[key]
+        if value is not None and (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(float(value))
+            or float(value) < 0
+        ):
+            fail(f"environment.{key} must be null or a finite number >= 0.")
+
+    def normalize_probe_map(
+        value: Any, label: str, *, packages: bool = False
+    ) -> Dict[str, Dict[str, Any]]:
+        if not isinstance(value, dict):
+            fail(f"{label} must be an object.")
+        normalized: Dict[str, Dict[str, Any]] = {}
+        allowed_statuses = (
+            {"available", "missing", "unknown"}
+            if packages
+            else {"available", "missing", "incompatible", "probe-failed", "unknown"}
+        )
+        expected_keys = {"status", "version"} if packages else {"status", "executable", "version"}
+        for name in sorted(value):
+            if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_.+-]+", name):
+                fail(f"{label} contains an invalid name.")
+            record = value[name]
+            if not isinstance(record, dict) or set(record) != expected_keys:
+                fail(f"{label}.{name} must contain exactly {', '.join(sorted(expected_keys))}.")
+            status = record.get("status")
+            if status not in allowed_statuses:
+                fail(f"{label}.{name}.status is invalid.")
+            version = record.get("version")
+            if version is not None and (
+                not isinstance(version, str)
+                or len(version) > 64
+                or PRIVATE_PATH_PATTERN.search(version)
+                or not SAFE_STORED_VERSION_PATTERN.fullmatch(version)
+            ):
+                fail(
+                    f"{label}.{name}.version is invalid, is not a version token, or contains a host path."
+                )
+            normalized_record: Dict[str, Any] = {"status": status, "version": version}
+            if not packages:
+                executable = record.get("executable")
+                if executable is not None and (
+                    not isinstance(executable, str)
+                    or not executable
+                    or not re.fullmatch(r"[A-Za-z0-9_.+-]+", executable)
+                    or Path(executable).name != executable
+                    or "/" in executable
+                    or "\\" in executable
+                ):
+                    fail(f"{label}.{name}.executable must be a safe basename or null.")
+                if status == "available" and executable is None:
+                    fail(f"{label}.{name}.executable is required when status is available.")
+                normalized_record["executable"] = executable
+            normalized[name] = normalized_record
+        return normalized
+
+    tools = normalize_probe_map(raw.get("tools"), "tools")
+    packages = normalize_probe_map(raw.get("r_packages"), "r_packages", packages=True)
+    executors = normalize_probe_map(raw.get("executors"), "executors")
+    return {
+        "schema_version": ENVIRONMENT_SNAPSHOT_SCHEMA_VERSION,
+        "workflow_version": workflow_version,
+        "environment_id": environment_id,
+        "environment_kind": environment_kind,
+        "probe_scope": "current-process-environment",
+        "probe_mode": probe_mode,
+        "network": "not-probed",
+        "environment": {
+            "operating_system": environment["operating_system"],
+            "architecture": environment["architecture"],
+            "python_version": environment["python_version"],
+            "cpu_count": cpu_count,
+            "memory_gb": (
+                float(environment["memory_gb"])
+                if environment["memory_gb"] is not None
+                else None
+            ),
+            "scratch_free_gb": (
+                float(environment["scratch_free_gb"])
+                if environment["scratch_free_gb"] is not None
+                else None
+            ),
+        },
+        "tools": tools,
+        "r_packages": packages,
+        "executors": executors,
+    }
+
+
+def snapshot_available(snapshot: Mapping[str, Any], group: str, name: str) -> bool:
+    values = snapshot.get(group)
+    if not isinstance(values, dict):
+        return False
+    record = values.get(name)
+    return isinstance(record, dict) and record.get("status") == AVAILABLE_PROBE_STATUS
+
+
+def snapshot_python_supported(snapshot: Mapping[str, Any]) -> bool:
+    environment = snapshot.get("environment")
+    if not isinstance(environment, dict):
+        return False
+    version = environment.get("python_version")
+    if not isinstance(version, str):
+        return False
+    match = re.match(r"^(\d+)\.(\d+)", version)
+    return bool(match and (int(match.group(1)), int(match.group(2))) >= (3, 10))
+
+
+def compile_environment_route(
+    profile: Mapping[str, Any],
+    snapshot: Mapping[str, Any],
+    host_snapshot: Mapping[str, Any] | None = None,
+) -> Dict[str, Any]:
+    inputs = profile["inputs"]
+    capabilities = profile["capabilities"]
+    permissions = profile["permissions"]
+    compute = profile["compute"]
+    requirements = profile["requirements"]
+    intent = profile["intent"]
+    target = compute["target"]
+    stages: List[Dict[str, Any]] = []
+    warnings: List[str] = []
+    considered_routes: List[Dict[str, str]] = []
+    used_tools: set[str] = set()
+    used_compute_tools: set[str] = set()
+    used_host_tools: set[str] = set()
+    same_machine = target in {"local", "host-only"}
+    effective_host_snapshot = snapshot if same_machine else host_snapshot
+
+    def compute_tool(name: str) -> bool:
+        return bool(
+            capabilities["compute_shell"]
+            and snapshot_available(snapshot, "tools", name)
+        )
+
+    def compute_package(name: str) -> bool:
+        return bool(
+            capabilities["compute_shell"]
+            and snapshot_available(snapshot, "r_packages", name)
+        )
+
+    def host_tool(name: str) -> bool:
+        return bool(
+            capabilities["host_shell"]
+            and effective_host_snapshot is not None
+            and snapshot_available(effective_host_snapshot, "tools", name)
+        )
+
+    def host_package(name: str) -> bool:
+        return bool(
+            capabilities["host_shell"]
+            and effective_host_snapshot is not None
+            and snapshot_available(effective_host_snapshot, "r_packages", name)
+        )
+
+    def executor(name: str) -> bool:
+        return snapshot_available(snapshot, "executors", name)
+
+    def has_at(location: str, site: str) -> bool:
+        if location == "absent":
+            return False
+        if same_machine:
+            return True
+        return location == "both" or location == site
+
+    def can_reach(location: str, site: str) -> bool:
+        if has_at(location, site):
+            return True
+        return bool(
+            location != "absent"
+            and not same_machine
+            and capabilities["file_transfer"]
+        )
+
+    def location_for_site(site: str) -> str:
+        return "host" if site == "host" else "compute-target"
+
+    def environment_for_location(location: str) -> str:
+        if location == "both":
+            return "host"
+        return location
+
+    def mark_tool(name: str, site: str) -> None:
+        used_tools.add(name)
+        if site == "host":
+            used_host_tools.add(name)
+        else:
+            used_compute_tools.add(name)
+
+    def add_stage(
+        step: int,
+        task: str,
+        status: str,
+        environment: str,
+        route: str,
+        software: Sequence[str],
+        reason_code: str,
+        reason: str,
+    ) -> None:
+        stages.append(
+            {
+                "step": step,
+                "task": task,
+                "status": status,
+                "environment": environment,
+                "route": route,
+                "software": list(software),
+                "reason_code": reason_code,
+                "reason": reason,
+            }
+        )
+
+    remote_lookup = bool(
+        capabilities["database_lookup"] and permissions["public_database_network"]
+    )
+    raw_query = inputs["query_kind"] != "accession-or-name"
+    remote_submission = bool(
+        not raw_query or permissions["remote_sequence_submission"]
+    )
+    query_location = inputs["query_location"]
+    candidates_location = inputs["candidates_location"]
+    cluster_mapping_location = inputs["cluster_mapping_location"]
+    alignment_location = inputs["alignment_location"]
+    tree_location = inputs["tree_location"]
+    metadata_location = inputs["metadata_location"]
+    sequence_database_location = inputs["sequence_database_location"]
+    sequence_database_format = inputs["sequence_database_format"]
+    compatible_search_names = {
+        "blast": ("blastp",),
+        "mmseqs2": ("mmseqs2",),
+        "both": ("blastp", "mmseqs2"),
+        "none": (),
+    }[sequence_database_format]
+    compute_search_tools = [
+        name for name in compatible_search_names if compute_tool(name)
+    ]
+    host_search_tools = [name for name in compatible_search_names if host_tool(name)]
+    local_search_site: str | None = None
+    local_search_tools: List[str] = []
+    if (
+        compute_search_tools
+        and has_at(sequence_database_location, "compute-target")
+        and (not raw_query or can_reach(query_location, "compute-target"))
+    ):
+        local_search_site = "compute-target"
+        local_search_tools = [compute_search_tools[0]]
+    elif (
+        host_search_tools
+        and has_at(sequence_database_location, "host")
+        and (not raw_query or can_reach(query_location, "host"))
+    ):
+        local_search_site = "host"
+        local_search_tools = [host_search_tools[0]]
+    elif (
+        compute_search_tools
+        and can_reach(sequence_database_location, "compute-target")
+        and (not raw_query or can_reach(query_location, "compute-target"))
+    ):
+        local_search_site = "compute-target"
+        local_search_tools = [compute_search_tools[0]]
+    elif (
+        host_search_tools
+        and can_reach(sequence_database_location, "host")
+        and (not raw_query or can_reach(query_location, "host"))
+    ):
+        local_search_site = "host"
+        local_search_tools = [host_search_tools[0]]
+    local_search = local_search_site is not None
+    scheduler = compute["scheduler"]
+    scheduler_ready = bool(
+        target != "hpc"
+        or scheduler in {"none", "other"}
+        or executor(scheduler)
+    )
+    if target == "hpc" and scheduler == "other":
+        warnings.append("SCHEDULER_NOT_PROBED")
+    if not compute_tool("iqtree2") and (
+        compute_tool("iqtree3") or compute_tool("iqtree")
+    ):
+        warnings.append("IQTREE_ALTERNATE_VERSION_NOT_AUTO_SELECTED")
+    compute_figure_ready = bool(
+        compute_tool("rscript")
+        and all(compute_package(name) for name in REQUIRED_GGTREE_PACKAGES)
+    )
+    host_figure_ready = bool(
+        host_tool("rscript")
+        and all(host_package(name) for name in REQUIRED_GGTREE_PACKAGES)
+    )
+    compute_root_ready = bool(capabilities["compute_tree_io"])
+    host_root_ready = bool(capabilities["host_tree_io"])
+
+    def choose_root_site(tree_location: str) -> str | None:
+        if tree_location == "host" and has_at(tree_location, "host") and host_root_ready:
+            return "host"
+        if tree_location == "both" and host_root_ready:
+            return "host"
+        if (
+            tree_location == "compute-target"
+            and has_at(tree_location, "compute-target")
+            and compute_root_ready
+        ):
+            return "compute-target"
+        if can_reach(tree_location, "compute-target") and compute_root_ready:
+            return "compute-target"
+        if can_reach(tree_location, "host") and host_root_ready:
+            return "host"
+        return None
+
+    tree_materialized = tree_location != "absent"
+    tree_already_rooted = inputs["tree_root_state"] == "rooted"
+
+    query_source_location: str | None = None
+    if inputs["query_resolved"] and query_location != "absent":
+        query_source_location = query_location
+    elif inputs["query_kind"] == "accession-or-name" and remote_lookup:
+        query_source_location = "host"
+    candidates_source_location: str | None = None
+    if candidates_location != "absent":
+        candidates_source_location = candidates_location
+    elif local_search_site is not None:
+        candidates_source_location = location_for_site(local_search_site)
+    elif remote_lookup and remote_submission and (
+        not raw_query or can_reach(query_location, "host")
+    ):
+        candidates_source_location = "host"
+
+    compute_python_ready = bool(
+        capabilities["compute_shell"] and snapshot_python_supported(snapshot)
+    )
+    host_python_ready = bool(
+        capabilities["host_shell"]
+        and effective_host_snapshot is not None
+        and snapshot_python_supported(effective_host_snapshot)
+    )
+
+    def taxonomy_possible_at(site: str) -> bool:
+        taxdump_location = inputs["taxdump_location"]
+        if not requirements["exact_taxonomy"]:
+            return True
+        if can_reach(taxdump_location, site):
+            return True
+        return bool(
+            remote_lookup
+            and (same_machine or site == "host" or capabilities["file_transfer"])
+        )
+
+    planner_site: str | None = None
+    if query_source_location is not None and candidates_source_location is not None:
+        if (
+            compute_python_ready
+            and can_reach(query_source_location, "compute-target")
+            and can_reach(candidates_source_location, "compute-target")
+        ):
+            planner_site = "compute-target"
+        elif (
+            host_python_ready
+            and can_reach(query_source_location, "host")
+            and can_reach(candidates_source_location, "host")
+        ):
+            planner_site = "host"
+
+    candidate_count = inputs["candidate_count"]
+    clustering_triggered = bool(
+        candidate_count is not None
+        and candidate_count >= requirements["clustering_trigger"]
+    )
+    clustering_stack_ready = bool(
+        can_reach(alignment_location, "compute-target")
+        or (
+            planner_site is not None
+            and can_reach(cluster_mapping_location, planner_site)
+        )
+        or not clustering_triggered
+        or (scheduler_ready and compute_tool("mmseqs2"))
+    )
+    reference_flow_ready = bool(
+        planner_site is not None
+        and taxonomy_possible_at(planner_site)
+        and can_reach(location_for_site(planner_site), "compute-target")
+    )
+    alignment_flow_ready = bool(
+        can_reach(alignment_location, "compute-target")
+        or (reference_flow_ready and scheduler_ready and compute_tool("mafft"))
+    )
+    trimming_ready = bool(
+        not requirements["trimming"]
+        or (scheduler_ready and compute_tool("trimal"))
+    )
+    generated_root_ready = bool(
+        not requirements["rooted_tree"]
+        or choose_root_site("compute-target") is not None
+    )
+    materialized_tree_ready = bool(
+        tree_materialized
+        and (
+            not requirements["rooted_tree"]
+            or tree_already_rooted
+            or choose_root_site(tree_location) is not None
+        )
+    )
+    accurate_regeneration_ready = bool(
+        alignment_flow_ready
+        and scheduler_ready
+        and trimming_ready
+        and clustering_stack_ready
+        and generated_root_ready
+        and compute_tool("iqtree2")
+    )
+    fast_regeneration_ready = bool(
+        alignment_flow_ready
+        and scheduler_ready
+        and trimming_ready
+        and clustering_stack_ready
+        and generated_root_ready
+        and compute_tool("fasttree")
+    )
+    accurate_ready = bool(materialized_tree_ready or accurate_regeneration_ready)
+    fast_ready = bool(materialized_tree_ready or fast_regeneration_ready)
+
+    selected_tree_mode: str | None
+    if intent == "planning":
+        selected_tree_mode = None
+        considered_routes.append({"route": "planning", "decision": "selected"})
+    elif intent == "visualization":
+        selected_tree_mode = "materialized" if tree_materialized else None
+        considered_routes.append({"route": "visualization", "decision": "selected"})
+    elif intent == "accurate":
+        selected_tree_mode = "materialized" if materialized_tree_ready else "accurate"
+        considered_routes.append({"route": "accurate", "decision": "selected-explicit"})
+        if not accurate_ready and compute_tool("fasttree"):
+            considered_routes.append(
+                {"route": "quick", "decision": "rejected-explicit-accurate-no-silent-downgrade"}
+            )
+    elif intent == "quick":
+        selected_tree_mode = "materialized" if materialized_tree_ready else "quick"
+        considered_routes.append({"route": "quick", "decision": "selected-explicit"})
+    elif accurate_ready:
+        selected_tree_mode = "materialized" if materialized_tree_ready else "accurate"
+        considered_routes.append({"route": "accurate", "decision": "selected-auto"})
+    elif fast_ready:
+        selected_tree_mode = "quick"
+        considered_routes.extend(
+            (
+                {"route": "accurate", "decision": "rejected-missing-required-capability"},
+                {"route": "quick", "decision": "selected-auto-fallback"},
+            )
+        )
+        warnings.append("AUTO_FALLBACK_TO_QUICK_TREE")
+    else:
+        selected_tree_mode = None
+        considered_routes.extend(
+            (
+                {"route": "accurate", "decision": "rejected-missing-required-capability"},
+                {"route": "quick", "decision": "rejected-missing-required-capability"},
+                {"route": "planning", "decision": "selected-auto-fallback"},
+            )
+        )
+        warnings.append("AUTO_FALLBACK_TO_PLANNING_ONLY")
+
+    if intent == "visualization":
+        required_steps = {9}
+        if requirements["rooted_tree"] and not tree_already_rooted:
+            required_steps.add(8)
+    elif selected_tree_mode is None:
+        required_steps = {1, 2, 3, 4}
+    elif selected_tree_mode == "materialized":
+        required_steps = {8}
+    elif alignment_location != "absent":
+        required_steps = {6, 7, 8}
+    else:
+        required_steps = set(range(1, 9))
+    if selected_tree_mode is not None and (
+        requirements["report"] or requirements["visualization"] != "none"
+    ):
+        required_steps.add(9)
+    if requirements["report"] or requirements["current_literature"]:
+        required_steps.add(10)
+
+    if 1 not in required_steps:
+        add_stage(1, "resolve-query", "skipped", "none", "not-required", (), "NOT_REQUIRED", "The selected intent starts from an existing downstream artifact.")
+        query_ready = True
+    elif inputs["query_resolved"] and query_location != "absent":
+        add_stage(1, "resolve-query", "ready", environment_for_location(query_location), "materialized-query", ("Python 3.10+",), "QUERY_ALREADY_MATERIALIZED", "A resolved query record is materialized at the declared location.")
+        query_ready = True
+    elif inputs["query_kind"] == "accession-or-name" and remote_lookup:
+        add_stage(1, "resolve-query", "ready", "host", "authorized-database-lookup", ("NCBI/UniProt/Ensembl API",), "PUBLIC_LOOKUP_AVAILABLE", "The host can resolve public identifiers without submitting a raw sequence.")
+        query_ready = True
+    elif local_search:
+        for name in local_search_tools:
+            mark_tool(name, local_search_site or "compute-target")
+        add_stage(1, "resolve-query", "conditional", local_search_site or "none", "local-sequence-context", tuple(local_search_tools), "SOURCE_IDENTITY_REVIEW_REQUIRED", "Local search can place the sequence, but it must not infer source organism from the closest hit.")
+        query_ready = False
+    elif remote_lookup and remote_submission and (
+        not raw_query or can_reach(query_location, "host")
+    ):
+        add_stage(1, "resolve-query", "conditional", "host", "authorized-remote-sequence-search", ("remote similarity search",), "SOURCE_IDENTITY_REVIEW_REQUIRED", "Remote search is permitted, but source identity and organism still require review.")
+        query_ready = False
+    else:
+        if raw_query and query_location == "absent":
+            reason_code = "QUERY_SEQUENCE_INPUT_MISSING"
+        elif raw_query and remote_lookup and not remote_submission:
+            reason_code = "REMOTE_SEQUENCE_SUBMISSION_NOT_ALLOWED"
+        else:
+            reason_code = "QUERY_RESOLUTION_CAPABILITY_MISSING"
+        add_stage(1, "resolve-query", "blocked", "none", "no-feasible-route", (), reason_code, "No materialized query, permitted remote lookup, or usable local sequence-search route is available.")
+        query_ready = False
+
+    add_stage(2, "define-objective", "ready" if 2 in required_steps else "skipped", "host", "reviewed-decision", (), "OBJECTIVE_REVIEW", "This task requires biological decisions, not a bioinformatics executable.")
+
+    if 3 not in required_steps:
+        add_stage(3, "discover-candidates", "skipped", "none", "not-required", (), "NOT_REQUIRED", "Candidate discovery is outside the selected intent.")
+        candidates_ready = True
+    elif candidates_location != "absent":
+        add_stage(3, "discover-candidates", "ready", environment_for_location(candidates_location), "materialized-candidates", (), "CANDIDATES_ALREADY_MATERIALIZED", "A candidate FASTA and metadata bundle is available at the declared location.")
+        candidates_ready = True
+    elif local_search:
+        for name in local_search_tools:
+            mark_tool(name, local_search_site or "compute-target")
+        add_stage(3, "discover-candidates", "ready", local_search_site or "none", "local-sequence-database", tuple(local_search_tools), "LOCAL_DISCOVERY_AVAILABLE", "A local sequence database and compatible search tool are available at one declared location.")
+        candidates_ready = True
+    elif remote_lookup and remote_submission and (
+        not raw_query or can_reach(query_location, "host")
+    ):
+        add_stage(3, "discover-candidates", "ready", "host", "authorized-database-discovery", ("NCBI/UniProt/Ensembl/orthology services",), "REMOTE_DISCOVERY_AVAILABLE", "The host has a permitted public database route.")
+        candidates_ready = True
+    else:
+        if raw_query and query_location == "absent":
+            reason_code = "QUERY_SEQUENCE_INPUT_MISSING"
+        elif raw_query and remote_lookup and not remote_submission:
+            reason_code = "REMOTE_SEQUENCE_SUBMISSION_NOT_ALLOWED"
+        else:
+            reason_code = "CANDIDATE_DISCOVERY_CAPABILITY_MISSING"
+        add_stage(3, "discover-candidates", "blocked", "none", "no-feasible-route", (), reason_code, "No materialized candidates, permitted remote discovery, or local sequence database route is available.")
+        candidates_ready = False
+
+    if 4 not in required_steps:
+        add_stage(4, "select-references-and-outgroups", "skipped", "none", "not-required", (), "NOT_REQUIRED", "Reference planning is outside the selected intent.")
+        reference_location = "absent"
+    elif not query_ready or not candidates_ready:
+        add_stage(4, "select-references-and-outgroups", "blocked", target, "dependency-blocked", ("Python 3.10+",), "UPSTREAM_INPUT_MISSING", "Query and candidate materialization must succeed first.")
+        reference_location = "absent"
+    elif planner_site is None:
+        add_stage(4, "select-references-and-outgroups", "blocked", "none", "planner-or-handoff-unavailable", ("Python 3.10+", "authorized file transfer when locations differ"), "PLANNER_INPUT_LOCATION_UNAVAILABLE", "No Python 3.10+ planning site can access both the resolved query and candidate bundle under the declared transfer capability.")
+        reference_location = "absent"
+    elif requirements["exact_taxonomy"] and not can_reach(inputs["taxdump_location"], planner_site):
+        if remote_lookup:
+            add_stage(4, "select-references-and-outgroups", "conditional", planner_site, "retrieve-transfer-and-validate-taxdump", ("Python 3.10+", "NCBI names.dmp", "NCBI nodes.dmp"), "TAXDUMP_ACQUISITION_REQUIRED", "Retrieve one official NCBI taxdump snapshot, place it on the selected planning site, and validate locally before approval.")
+            reference_location = location_for_site(planner_site)
+        else:
+            add_stage(4, "select-references-and-outgroups", "blocked", planner_site, "exact-taxonomy-unavailable", ("Python 3.10+", "NCBI names.dmp", "NCBI nodes.dmp"), "LOCAL_TAXDUMP_MISSING", "Exact TaxID validation was requested but the planning site has no reachable official taxdump or permitted acquisition route.")
+            reference_location = "absent"
+    else:
+        add_stage(4, "select-references-and-outgroups", "ready", planner_site, "bundled-offline-planner", ("Python 3.10+",), "PLANNER_AVAILABLE", "The deterministic planner can access the declared inputs and prepare the review bundle on the selected site.")
+        reference_location = location_for_site(planner_site)
+    if 5 not in required_steps:
+        add_stage(5, "cluster-expanded-candidates", "skipped", "none", "not-required", (), "NOT_REQUIRED", "Clustering execution is outside the selected route.")
+    elif candidate_count is None:
+        add_stage(5, "cluster-expanded-candidates", "conditional", target, "evaluate-after-discovery", ("MMseqs2 when triggered",), "CANDIDATE_COUNT_UNKNOWN", "Re-evaluate after the candidate count is materialized.")
+    elif not clustering_triggered:
+        add_stage(5, "cluster-expanded-candidates", "skipped", target, "below-trigger", (), "CLUSTERING_NOT_TRIGGERED", "The candidate count is below the declared clustering trigger.")
+    elif planner_site is not None and cluster_mapping_location != "absent" and can_reach(cluster_mapping_location, planner_site):
+        add_stage(5, "cluster-expanded-candidates", "ready", planner_site, "review-or-transfer-existing-cluster-mapping", ("authorized file transfer",) if not has_at(cluster_mapping_location, planner_site) else (), "CLUSTER_MAPPING_ALREADY_MATERIALIZED", "An audited cluster mapping is reachable by the planning site; import it, rerun reference selection, and invalidate any pre-clustering approval.")
+    elif cluster_mapping_location != "absent":
+        add_stage(5, "cluster-expanded-candidates", "blocked", planner_site or "none", "cluster-mapping-location-unavailable", ("authorized file transfer",), "FILE_TRANSFER_CAPABILITY_MISSING", "The precomputed cluster mapping is not reachable by the selected planning site.")
+    elif not scheduler_ready:
+        add_stage(5, "cluster-expanded-candidates", "blocked", target, "scheduler-unavailable", (scheduler,), "SCHEDULER_LAUNCHER_MISSING", "The selected HPC scheduler launcher was not observed in the target snapshot.")
+    elif not can_reach(reference_location, "compute-target"):
+        add_stage(5, "cluster-expanded-candidates", "blocked", target, "input-location-unavailable", ("authorized file transfer",), "FILE_TRANSFER_CAPABILITY_MISSING", "The selected compute target cannot access the approved reference bundle.")
+    elif compute_tool("mmseqs2"):
+        mark_tool("mmseqs2", "compute-target")
+        add_stage(5, "cluster-expanded-candidates", "ready", target, "mmseqs2", ("MMseqs2",), "MMSEQS2_AVAILABLE", "MMseqs2 is available on the compute target.")
+    else:
+        add_stage(5, "cluster-expanded-candidates", "blocked", target, "missing-mmseqs2", ("MMseqs2",), "MMSEQS2_REQUIRED", "Clustering is triggered, so reference approval must wait for MMseqs2 or an audited precomputed mapping.")
+
+    if 6 not in required_steps:
+        add_stage(6, "align-and-assess-conservation", "skipped", "none", "not-required", (), "NOT_REQUIRED", "Alignment execution is outside the selected route.")
+    elif alignment_location != "absent" and can_reach(alignment_location, "compute-target"):
+        add_stage(6, "align-and-assess-conservation", "ready", target, "review-or-transfer-existing-alignment", ("authorized file transfer",) if not has_at(alignment_location, "compute-target") else (), "ALIGNMENT_ALREADY_MATERIALIZED", "An existing alignment is reachable by the compute target and can be reviewed after provenance and tip-set checks.")
+        working_alignment_location = "compute-target"
+    elif alignment_location != "absent":
+        add_stage(6, "align-and-assess-conservation", "blocked", target, "existing-alignment-location-unavailable", ("authorized file transfer",), "FILE_TRANSFER_CAPABILITY_MISSING", "The existing alignment is not reachable by the selected compute target.")
+        working_alignment_location = "absent"
+    elif next(item for item in stages if item["step"] == 4)["status"] == "blocked" or next(item for item in stages if item["step"] == 5)["status"] == "blocked":
+        add_stage(6, "align-and-assess-conservation", "blocked", target, "dependency-blocked", ("approved reference bundle",), "UPSTREAM_REFERENCE_CAPABILITY_MISSING", "Alignment cannot start until reference selection and any triggered clustering are feasible.")
+        working_alignment_location = "absent"
+    elif not scheduler_ready:
+        add_stage(6, "align-and-assess-conservation", "blocked", target, "scheduler-unavailable", (scheduler,), "SCHEDULER_LAUNCHER_MISSING", "The selected HPC scheduler launcher was not observed in the target snapshot.")
+        working_alignment_location = "absent"
+    elif not can_reach(reference_location, "compute-target"):
+        add_stage(6, "align-and-assess-conservation", "blocked", target, "input-location-unavailable", ("authorized file transfer",), "FILE_TRANSFER_CAPABILITY_MISSING", "The approved reference FASTA cannot reach the selected compute target.")
+        working_alignment_location = "absent"
+    elif compute_tool("mafft"):
+        mark_tool("mafft", "compute-target")
+        add_stage(6, "align-and-assess-conservation", "ready", target, "mafft", ("MAFFT",), "MAFFT_AVAILABLE", "MAFFT is available on the compute target.")
+        working_alignment_location = "compute-target"
+    else:
+        add_stage(6, "align-and-assess-conservation", "blocked", target, "missing-mafft", ("MAFFT",), "MAFFT_REQUIRED", "Protein-tree execution requires MAFFT; no silent MSA-tool substitution is allowed.")
+        working_alignment_location = "absent"
+
+    if 7 not in required_steps:
+        add_stage(7, "trim-and-test-sensitivity", "skipped", "none", "not-required", (), "NOT_REQUIRED", "Trimming execution is outside the selected route.")
+    elif not scheduler_ready:
+        add_stage(7, "trim-and-test-sensitivity", "blocked", target, "scheduler-unavailable", (scheduler,), "SCHEDULER_LAUNCHER_MISSING", "The selected HPC scheduler launcher was not observed in the target snapshot.")
+    elif next(item for item in stages if item["step"] == 6)["status"] == "blocked":
+        add_stage(7, "trim-and-test-sensitivity", "blocked", target, "dependency-blocked", ("approved alignment",), "UPSTREAM_ALIGNMENT_CAPABILITY_MISSING", "Trimming cannot start until an alignment is reachable.")
+    elif not requirements["trimming"]:
+        add_stage(7, "trim-and-test-sensitivity", "ready", target, "reviewed-untrimmed-route", (), "TRIMMING_DISABLED_EXPLICITLY", "The profile explicitly requests a reviewed untrimmed primary alignment.")
+    elif compute_tool("trimal"):
+        mark_tool("trimal", "compute-target")
+        add_stage(7, "trim-and-test-sensitivity", "ready", target, "trimal", ("trimAl",), "TRIMAL_AVAILABLE", "trimAl is available for the requested sensitivity profiles.")
+    else:
+        add_stage(7, "trim-and-test-sensitivity", "blocked", target, "missing-trimal", ("trimAl",), "TRIMAL_REQUIRED", "Trimming is enabled, so trimAl cannot be silently disabled or replaced.")
+
+    if 8 not in required_steps:
+        add_stage(8, "infer-root-and-check-tree", "skipped", "none", "not-required", (), "NOT_REQUIRED", "Tree inference is outside the selected route.")
+    elif tree_materialized and selected_tree_mode == "materialized":
+        if requirements["rooted_tree"] and not tree_already_rooted:
+            root_site = choose_root_site(tree_location)
+            if root_site is None:
+                add_stage(8, "infer-root-and-check-tree", "blocked", environment_for_location(tree_location), "existing-tree-without-rooting-route", ("annotation-preserving tree I/O",), "ROOTING_TOOL_REQUIRED", "The existing tree is declared unrooted, and no support-preserving rooting route can access it.")
+                routed_tree_location = tree_location
+            else:
+                root_software = ("annotation-preserving tree I/O",)
+                add_stage(8, "infer-root-and-check-tree", "ready", root_site, "root-existing-tree", root_software, "EXISTING_TREE_ROOTING_AVAILABLE", "The unrooted existing tree can be copied and rooted without changing its support annotations.")
+                routed_tree_location = location_for_site(root_site)
+        else:
+            add_stage(8, "infer-root-and-check-tree", "ready", environment_for_location(tree_location), "review-existing-tree", (), "TREE_ALREADY_MATERIALIZED", "The existing tree and its declared root state can be reused only after provenance and support review.")
+            routed_tree_location = tree_location
+    elif not scheduler_ready:
+        add_stage(8, "infer-root-and-check-tree", "blocked", target, "scheduler-unavailable", (scheduler,), "SCHEDULER_LAUNCHER_MISSING", "The selected HPC scheduler launcher was not observed in the target snapshot.")
+        routed_tree_location = "absent"
+    elif next(item for item in stages if item["step"] == 7)["status"] == "blocked":
+        add_stage(8, "infer-root-and-check-tree", "blocked", target, "dependency-blocked", ("approved alignment",), "UPSTREAM_ALIGNMENT_CAPABILITY_MISSING", "Tree inference cannot start until alignment and trimming are feasible.")
+        routed_tree_location = "absent"
+    elif selected_tree_mode in {"accurate", "quick"}:
+        inference_tool = "iqtree2" if selected_tree_mode == "accurate" else "fasttree"
+        display_tool = "IQ-TREE2" if selected_tree_mode == "accurate" else "FastTree"
+        missing_code = "IQTREE2_REQUIRED" if selected_tree_mode == "accurate" else "FASTTREE_REQUIRED"
+        if not compute_tool(inference_tool):
+            if selected_tree_mode == "accurate" and (
+                compute_tool("iqtree3") or compute_tool("iqtree")
+            ):
+                missing_code = "IQTREE_ALTERNATE_VERSION_REQUIRES_APPROVAL"
+                reason = "An alternate IQ-TREE command is visible, but this workflow is locked to IQ-TREE2 semantics; validate and approve a version-specific route instead of silently substituting it."
+            else:
+                reason = f"The explicit {selected_tree_mode} route requires {display_tool}; no silent substitution is allowed."
+            add_stage(8, "infer-root-and-check-tree", "blocked", target, "missing-tree-capability", (display_tool,), missing_code, reason)
+            routed_tree_location = "absent"
+        else:
+            mark_tool(inference_tool, "compute-target")
+            root_site = choose_root_site("compute-target") if requirements["rooted_tree"] else None
+            if requirements["rooted_tree"] and root_site is None:
+                add_stage(8, "infer-root-and-check-tree", "blocked", target, f"{inference_tool}-without-rooting-tool", (display_tool, "annotation-preserving tree I/O"), "ROOTING_TOOL_REQUIRED", f"{display_tool} inference is available, but the requested rooted derivative lacks a support-preserving route that can access the inferred tree.")
+                routed_tree_location = "compute-target"
+            else:
+                software: List[str] = [display_tool]
+                stage_environment = target
+                route_label = inference_tool
+                routed_tree_location = "compute-target"
+                if root_site is not None:
+                    stage_environment = target if root_site == "compute-target" else f"{target}+host"
+                    route_label += f"-then-root-on-{root_site}"
+                    routed_tree_location = location_for_site(root_site)
+                    software.append("annotation-preserving tree I/O")
+                reason_code = "IQTREE2_AVAILABLE" if selected_tree_mode == "accurate" else "FASTTREE_AVAILABLE"
+                reason = "The accurate route uses IQ-TREE2; rooting is a separate derivative step." if selected_tree_mode == "accurate" else "The quick route uses approximate ML and SH-like local support; rooting is a separate derivative step."
+                add_stage(8, "infer-root-and-check-tree", "ready", stage_environment, route_label, tuple(software), reason_code, reason)
+    else:
+        add_stage(8, "infer-root-and-check-tree", "blocked", target, "missing-tree-capability", ("complete tree-inference capability",), "TREE_STACK_INCOMPLETE", f"The explicit {selected_tree_mode or intent} route is incomplete.")
+        routed_tree_location = "absent"
+
+    tree_stage = next(item for item in stages if item["step"] == 8)
+    tree_available = bool(
+        (tree_materialized and 8 not in required_steps) or tree_stage["status"] == "ready"
+    )
+    if 8 not in required_steps:
+        routed_tree_location = tree_location
+    planner_stage = next(item for item in stages if item["step"] == 4)
+    effective_metadata_location = metadata_location
+    if effective_metadata_location == "absent" and planner_stage["status"] in {"ready", "conditional"}:
+        effective_metadata_location = reference_location
+    visualization = requirements["visualization"]
+    if 9 not in required_steps:
+        add_stage(9, "annotate-and-visualize", "skipped", "none", "not-required", (), "NOT_REQUIRED", "Annotation and visualization are outside the selected route.")
+    elif not tree_available:
+        add_stage(9, "annotate-and-visualize", "blocked", target, "tree-required", (), "TREE_INPUT_MISSING", "Visualization requires a validated tree and matching metadata.")
+    elif effective_metadata_location == "absent":
+        add_stage(9, "annotate-and-visualize", "blocked", target, "metadata-required", (), "METADATA_INPUT_MISSING", "Visualization-only routing requires materialized metadata whose tip IDs match the tree.")
+    elif visualization == "none":
+        if host_python_ready and can_reach(routed_tree_location, "host") and can_reach(effective_metadata_location, "host"):
+            annotation_site = "host"
+        elif compute_python_ready and can_reach(routed_tree_location, "compute-target") and can_reach(effective_metadata_location, "compute-target"):
+            annotation_site = "compute-target"
+        else:
+            annotation_site = None
+        if annotation_site is None:
+            add_stage(9, "annotate-and-visualize", "blocked", "none", "annotation-input-location-unavailable", ("Python 3.10+", "authorized file transfer"), "FILE_TRANSFER_CAPABILITY_MISSING", "No Python planning site can access both the tree and matching metadata.")
+        else:
+            add_stage(9, "annotate-and-visualize", "ready", annotation_site, "local-annotation-files", ("bundled iTOL writer",), "ANNOTATION_ONLY", "Local annotation and metadata files require no remote upload.")
+    elif visualization in {"local", "either"} and host_figure_ready and can_reach(routed_tree_location, "host") and can_reach(effective_metadata_location, "host"):
+        mark_tool("rscript", "host")
+        add_stage(9, "annotate-and-visualize", "ready", "host", "host-ggtree", ("Rscript", *REQUIRED_GGTREE_PACKAGES), "LOCAL_GGTREE_AVAILABLE", "The host ggtree/ggplot2 stack can access the tree and matching metadata.")
+    elif visualization in {"local", "either"} and compute_figure_ready and can_reach(routed_tree_location, "compute-target") and can_reach(effective_metadata_location, "compute-target"):
+        mark_tool("rscript", "compute-target")
+        add_stage(9, "annotate-and-visualize", "ready", target, "compute-target-ggtree", ("Rscript", *REQUIRED_GGTREE_PACKAGES), "LOCAL_GGTREE_AVAILABLE", "The compute-target ggtree/ggplot2 stack can access the tree and matching metadata.")
+    elif visualization in {"itol", "either"} and capabilities["web_upload"] and permissions["itol_upload"] and can_reach(routed_tree_location, "host") and can_reach(effective_metadata_location, "host"):
+        add_stage(9, "annotate-and-visualize", "ready", "host", "authorized-itol-upload", ("iTOL",), "ITOL_UPLOAD_AVAILABLE", "The profile permits iTOL upload; actual upload still requires a fresh remote-action check.")
+    else:
+        add_stage(9, "annotate-and-visualize", "blocked", target, "visualization-capability-missing", ("Rscript + ggtree packages or authorized iTOL",), "VISUALIZATION_ROUTE_UNAVAILABLE", "No route satisfies the requested visualization mode.")
+
+    if 10 not in required_steps:
+        add_stage(10, "compare-evidence-and-report", "skipped", "none", "not-required", (), "NOT_REQUIRED", "Current evidence comparison is outside the selected route.")
+    elif requirements["current_literature"] and capabilities["literature_search"] and permissions["literature_network"]:
+        add_stage(10, "compare-evidence-and-report", "ready", "host", "authorized-scholarly-search", ("scholarly literature index",), "CURRENT_LITERATURE_AVAILABLE", "The host can retrieve current DOI/PMID-linked evidence.")
+    elif requirements["current_literature"] and inputs["cached_literature"]:
+        add_stage(10, "compare-evidence-and-report", "conditional", "local-input", "cached-literature", (), "CURRENT_SEARCH_UNAVAILABLE", "Cached literature can be reported with its retrieval date and an explicit current-search limitation.")
+    elif requirements["current_literature"]:
+        add_stage(10, "compare-evidence-and-report", "conditional", "none", "evidence-limitation", (), "CURRENT_SEARCH_UNAVAILABLE", "Complete the report only with an explicit evidence-search limitation; do not invent current citations.")
+    else:
+        add_stage(10, "compare-evidence-and-report", "ready", "host", "report-without-current-search", (), "CURRENT_LITERATURE_NOT_REQUESTED", "The requested report does not claim a current literature comparison.")
+
+    required_stage_records = [stage for stage in stages if stage["step"] in required_steps]
+    blockers = [stage["reason_code"] for stage in required_stage_records if stage["status"] == "blocked"]
+    limitations = [stage["reason_code"] for stage in required_stage_records if stage["status"] == "conditional"]
+    observed_environment = snapshot.get("environment", {})
+    observed_cpu = observed_environment.get("cpu_count")
+    observed_memory = observed_environment.get("memory_gb")
+    resource_limitations: List[str] = []
+    resource_relevant = selected_tree_mode in {"accurate", "quick"}
+    if resource_relevant:
+        if not isinstance(observed_cpu, int):
+            resource_limitations.append("OBSERVED_CPU_COUNT_UNKNOWN")
+        elif compute["threads"] > observed_cpu:
+            resource_limitations.append("REQUESTED_THREADS_EXCEED_OBSERVED_CPUS")
+        if compute["memory_gb"] is not None:
+            if not isinstance(observed_memory, (int, float)):
+                resource_limitations.append("OBSERVED_MEMORY_UNKNOWN")
+            elif compute["memory_gb"] > float(observed_memory):
+                resource_limitations.append("REQUESTED_MEMORY_EXCEEDS_OBSERVED_MEMORY")
+    probe_limitations: List[str] = []
+    if used_compute_tools and snapshot.get("probe_mode") == "path-only":
+        probe_limitations.append("COMPUTE_TOOLS_PATH_DISCOVERY_ONLY")
+    if (
+        used_host_tools
+        and effective_host_snapshot is not None
+        and effective_host_snapshot.get("probe_mode") == "path-only"
+    ):
+        probe_limitations.append("HOST_TOOLS_PATH_DISCOVERY_ONLY")
+    if used_tools:
+        warnings.append("TOOL_VERSION_COMPATIBILITY_REQUIRES_REVIEW")
+    limitations.extend(resource_limitations)
+    limitations.extend(probe_limitations)
+    resource_assessment = {
+        "requested_threads": compute["threads"],
+        "observed_cpu_count": observed_cpu if isinstance(observed_cpu, int) else None,
+        "requested_memory_gb": compute["memory_gb"],
+        "observed_memory_gb": (
+            float(observed_memory) if isinstance(observed_memory, (int, float)) else None
+        ),
+        "observed_scratch_free_gb": observed_environment.get("scratch_free_gb"),
+        "status": (
+            "not-applicable"
+            if not resource_relevant
+            else (
+                "review-required"
+                if resource_limitations
+                else "within-observed-hints"
+            )
+        ),
+        "limitations": sorted(resource_limitations),
+    }
+
+    remote_compute_environments = {
+        target,
+        "compute-target",
+        f"{target}+host",
+        "host+compute-target",
+    }
+    remote_handoff_needed = bool(
+        target in {"hpc", "ssh"}
+        and any(
+            stage["status"] != "skipped"
+            and stage["environment"] in remote_compute_environments
+            for stage in required_stage_records
+        )
+    )
+    host_stage_used = any(
+        stage["status"] != "skipped"
+        and stage["step"] != 2
+        and (
+            stage["environment"] in {"host", "local-input"}
+            or "+host" in stage["environment"]
+            or stage["environment"].startswith("host+")
+        )
+        for stage in required_stage_records
+    )
+    host_online_routes = {
+        "authorized-database-lookup",
+        "authorized-remote-sequence-search",
+        "authorized-database-discovery",
+        "retrieve-transfer-and-validate-taxdump",
+        "authorized-itol-upload",
+        "authorized-scholarly-search",
+    }
+    host_online_used = any(
+        stage["status"] != "skipped" and stage["route"] in host_online_routes
+        for stage in required_stage_records
+    )
+    if target in {"hpc", "ssh"} and not remote_handoff_needed:
+        warnings.append("DECLARED_REMOTE_COMPUTE_TARGET_NOT_USED")
+
+    if target == "host-only":
+        route_name = "browser-or-host-only"
+    elif target in {"hpc", "ssh"} and remote_handoff_needed:
+        if host_stage_used or host_online_used:
+            route_name = "hybrid-agent-hpc" if target == "hpc" else "hybrid-agent-ssh"
+        else:
+            route_name = "hpc-offline" if target == "hpc" else "ssh-offline"
+    elif selected_tree_mode is None:
+        route_name = "planning-host-assisted" if host_online_used else "planning-offline"
+    elif host_online_used:
+        route_name = "workstation-online"
+    else:
+        route_name = "workstation-offline"
+
+    if blockers:
+        status = "blocked"
+    elif remote_handoff_needed:
+        status = "handoff-required"
+    elif selected_tree_mode is None:
+        status = "planning-only"
+    elif limitations:
+        status = "ready-with-limitations"
+    else:
+        status = "ready"
+
+    profile_hash = sha256_text(canonical_json(profile))
+    snapshot_hash = sha256_text(canonical_json(snapshot))
+    host_snapshot_hash = (
+        sha256_text(canonical_json(effective_host_snapshot))
+        if effective_host_snapshot is not None
+        else None
+    )
+    decision_core = {
+        "profile_id": profile["profile_id"],
+        "profile_sha256": profile_hash,
+        "compute_environment_id": snapshot["environment_id"],
+        "compute_snapshot_sha256": snapshot_hash,
+        "host_environment_id": (
+            effective_host_snapshot["environment_id"]
+            if effective_host_snapshot is not None
+            else None
+        ),
+        "host_snapshot_sha256": host_snapshot_hash,
+        "intent": intent,
+        "selected_route": route_name,
+        "selected_tree_mode": selected_tree_mode,
+        "compute_target": target,
+        "scheduler": compute["scheduler"],
+        "status": status,
+        "required_steps": sorted(required_steps),
+        "stages": stages,
+        "considered_routes": considered_routes,
+        "blockers": sorted(set(blockers)),
+        "limitations": sorted(set(limitations)),
+        "warnings": sorted(set(warnings)),
+        "used_tools": sorted(used_tools),
+        "resource_assessment": resource_assessment,
+    }
+    return {
+        "schema_version": ROUTE_DECISION_SCHEMA_VERSION,
+        "workflow_version": VERSION,
+        **decision_core,
+        "route_hash": sha256_text(canonical_json(decision_core)),
+        "execution_authorized": False,
+        "authorization_note": "This decision selects a feasible route; it does not authorize network, SSH, scheduler, upload, or tool execution.",
+    }
+
+
+def run_doctor(args: argparse.Namespace) -> int:
+    payload = normalize_environment_snapshot(
+        collect_environment_snapshot(
+            args.environment_id,
+            args.kind,
+            run_version_probes=args.run_version_probes,
+        )
+    )
+    emit_json_document(
+        payload,
+        output=args.out,
+        compact=args.json,
+        label="environment snapshot",
+    )
     return 0
+
+
+def run_route(args: argparse.Namespace) -> int:
+    profile_path = Path(args.profile).expanduser().resolve()
+    profile = normalize_environment_profile(
+        read_json_document(profile_path, "INVALID_ENVIRONMENT_PROFILE", "Environment profile")
+    )
+    if args.snapshot:
+        snapshot_path = Path(args.snapshot).expanduser().resolve()
+        snapshot = normalize_environment_snapshot(
+            read_json_document(
+                snapshot_path,
+                "INVALID_ENVIRONMENT_SNAPSHOT",
+                "Environment snapshot",
+            )
+        )
+    else:
+        if profile["compute"]["target"] != "local":
+            raise WorkflowError(
+                "REMOTE_SNAPSHOT_REQUIRED",
+                "HPC, SSH, and host-only targets require an imported snapshot from that target.",
+            )
+        snapshot = normalize_environment_snapshot(
+            collect_environment_snapshot(
+                profile["profile_id"], profile["compute"]["target"]
+            )
+        )
+    if snapshot["environment_kind"] != profile["compute"]["target"]:
+        raise WorkflowError(
+            "ENVIRONMENT_KIND_MISMATCH",
+            "Profile compute.target must equal snapshot environment_kind.",
+        )
+    host_snapshot: Mapping[str, Any] | None = None
+    if args.host_snapshot:
+        if profile["compute"]["target"] in {"local", "host-only"}:
+            raise WorkflowError(
+                "HOST_SNAPSHOT_NOT_APPLICABLE",
+                "--host-snapshot is only used when the compute target is HPC or SSH.",
+            )
+        host_snapshot_path = Path(args.host_snapshot).expanduser().resolve()
+        host_snapshot = normalize_environment_snapshot(
+            read_json_document(
+                host_snapshot_path,
+                "INVALID_ENVIRONMENT_SNAPSHOT",
+                "Host environment snapshot",
+            )
+        )
+        if host_snapshot["environment_kind"] not in {"local", "host-only"}:
+            raise WorkflowError(
+                "HOST_SNAPSHOT_KIND_MISMATCH",
+                "--host-snapshot must describe a local or host-only environment.",
+            )
+    decision = compile_environment_route(profile, snapshot, host_snapshot)
+    emit_json_document(
+        decision,
+        output=args.out,
+        compact=args.json,
+        label="route decision",
+    )
+    return 2 if decision["status"] == "blocked" else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gene_to_tree.py",
-        description="Compile an auditable gene-to-reference-tree review bundle or inspect local tools.",
+        description="Compile a review bundle, inspect an execution environment, or select a feasible workflow route.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -2302,10 +3826,43 @@ def build_parser() -> argparse.ArgumentParser:
     plan.add_argument("--dry-run", action="store_true", help="Plan only; launch no external tools.")
     plan.set_defaults(handler=run_plan)
     doctor = subparsers.add_parser(
-        "doctor", help="Inspect whether optional local bioinformatics executables are available."
+        "doctor", help="Create a capability snapshot of the current execution environment."
+    )
+    doctor.add_argument(
+        "--environment-id",
+        default="current",
+        help="Stable non-sensitive label for this environment (default: current).",
+    )
+    doctor.add_argument(
+        "--kind",
+        choices=("local", "hpc", "ssh", "host-only"),
+        default="local",
+        help="Environment class represented by this snapshot.",
     )
     doctor.add_argument("--json", action="store_true", help="Emit compact JSON.")
+    doctor.add_argument("--out", help="Write a new snapshot JSON file instead of stdout.")
+    doctor.add_argument(
+        "--run-version-probes",
+        action="store_true",
+        help="Opt in to local version/help commands and R namespace checks; default is PATH-only discovery.",
+    )
     doctor.set_defaults(handler=run_doctor)
+    route = subparsers.add_parser(
+        "route",
+        help="Compile a workflow decision for one explicit capability profile and compute target.",
+    )
+    route.add_argument("--profile", required=True, help="Environment profile 0.1 JSON file.")
+    route.add_argument(
+        "--snapshot",
+        help="Doctor snapshot JSON from the actual compute target; omit to probe the current environment.",
+    )
+    route.add_argument(
+        "--host-snapshot",
+        help="Optional local/host-only snapshot for host-side planning, local search, rooting, annotation, or rendering in a remote workflow.",
+    )
+    route.add_argument("--json", action="store_true", help="Emit compact JSON.")
+    route.add_argument("--out", help="Write a new route-decision JSON file instead of stdout.")
+    route.set_defaults(handler=run_route)
     return parser
 
 

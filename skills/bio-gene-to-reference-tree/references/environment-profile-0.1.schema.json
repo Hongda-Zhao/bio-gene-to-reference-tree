@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bio-gene-to-reference-tree:environment-profile:0.1",
+  "title": "Gene-to-reference-tree environment profile 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "intent",
+    "inputs",
+    "capabilities",
+    "permissions",
+    "compute",
+    "requirements"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "profile_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+    "intent": {
+      "enum": ["planning", "quick", "accurate", "auto", "visualization"]
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind",
+        "query_resolved",
+        "query_location",
+        "candidates_location",
+        "cluster_mapping_location",
+        "alignment_location",
+        "tree_location",
+        "tree_root_state",
+        "metadata_location",
+        "candidate_count",
+        "taxdump_location",
+        "sequence_database_location",
+        "sequence_database_format",
+        "cached_literature"
+      ],
+      "properties": {
+        "query_kind": {
+          "enum": ["accession-or-name", "public-sequence", "unpublished-sequence"]
+        },
+        "query_resolved": {"type": "boolean"},
+        "query_location": {"$ref": "#/$defs/location"},
+        "candidates_location": {"$ref": "#/$defs/location"},
+        "cluster_mapping_location": {"$ref": "#/$defs/location"},
+        "alignment_location": {"$ref": "#/$defs/location"},
+        "tree_location": {"$ref": "#/$defs/location"},
+        "tree_root_state": {"enum": ["none", "unrooted", "rooted"]},
+        "metadata_location": {"$ref": "#/$defs/location"},
+        "candidate_count": {"type": ["integer", "null"], "minimum": 0},
+        "taxdump_location": {"$ref": "#/$defs/location"},
+        "sequence_database_location": {"$ref": "#/$defs/location"},
+        "sequence_database_format": {"enum": ["none", "blast", "mmseqs2", "both"]},
+        "cached_literature": {"type": "boolean"}
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compute_shell",
+        "host_shell",
+        "database_lookup",
+        "literature_search",
+        "file_transfer",
+        "compute_tree_io",
+        "host_tree_io",
+        "web_upload"
+      ],
+      "properties": {
+        "compute_shell": {"type": "boolean"},
+        "host_shell": {"type": "boolean"},
+        "database_lookup": {"type": "boolean"},
+        "literature_search": {"type": "boolean"},
+        "file_transfer": {"type": "boolean"},
+        "compute_tree_io": {"type": "boolean"},
+        "host_tree_io": {"type": "boolean"},
+        "web_upload": {"type": "boolean"}
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "public_database_network",
+        "remote_sequence_submission",
+        "literature_network",
+        "itol_upload"
+      ],
+      "properties": {
+        "public_database_network": {"type": "boolean"},
+        "remote_sequence_submission": {"type": "boolean"},
+        "literature_network": {"type": "boolean"},
+        "itol_upload": {"type": "boolean"}
+      }
+    },
+    "compute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "scheduler", "threads", "memory_gb"],
+      "properties": {
+        "target": {"enum": ["local", "hpc", "ssh", "host-only"]},
+        "scheduler": {"enum": ["none", "pbs", "slurm", "lsf", "other"]},
+        "threads": {"type": "integer", "minimum": 1},
+        "memory_gb": {"type": ["number", "null"], "exclusiveMinimum": 0}
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trimming",
+        "exact_taxonomy",
+        "rooted_tree",
+        "visualization",
+        "current_literature",
+        "report",
+        "clustering_trigger"
+      ],
+      "properties": {
+        "trimming": {"type": "boolean"},
+        "exact_taxonomy": {"type": "boolean"},
+        "rooted_tree": {"type": "boolean"},
+        "visualization": {"enum": ["none", "local", "itol", "either"]},
+        "current_literature": {"type": "boolean"},
+        "report": {"type": "boolean"},
+        "clustering_trigger": {"type": "integer", "minimum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "location": {"enum": ["absent", "host", "compute-target", "both"]}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "inputs": {
+            "properties": {"sequence_database_location": {"const": "absent"}},
+            "required": ["sequence_database_location"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "properties": {"sequence_database_format": {"const": "none"}}
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "inputs": {
+            "properties": {
+              "sequence_database_format": {"enum": ["blast", "mmseqs2", "both"]}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "inputs": {
+            "properties": {"query_resolved": {"const": true}},
+            "required": ["query_resolved"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "properties": {"query_location": {"not": {"const": "absent"}}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "inputs": {
+            "properties": {"tree_location": {"const": "absent"}},
+            "required": ["tree_location"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {"properties": {"tree_root_state": {"const": "none"}}}
+        }
+      },
+      "else": {
+        "properties": {
+          "inputs": {
+            "properties": {
+              "tree_root_state": {"enum": ["unrooted", "rooted"]}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "compute": {
+            "properties": {"target": {"enum": ["local", "ssh", "host-only"]}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "compute": {
+            "properties": {"scheduler": {"const": "none"}}
+          }
+        }
+      }
+    }
+  ]
+}

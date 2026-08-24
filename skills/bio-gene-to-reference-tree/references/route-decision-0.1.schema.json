@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bio-gene-to-reference-tree:route-decision:0.1",
+  "title": "Gene-to-reference-tree route decision 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "workflow_version",
+    "profile_id",
+    "profile_sha256",
+    "compute_environment_id",
+    "compute_snapshot_sha256",
+    "host_environment_id",
+    "host_snapshot_sha256",
+    "intent",
+    "selected_route",
+    "selected_tree_mode",
+    "compute_target",
+    "scheduler",
+    "status",
+    "required_steps",
+    "stages",
+    "considered_routes",
+    "blockers",
+    "limitations",
+    "warnings",
+    "used_tools",
+    "resource_assessment",
+    "route_hash",
+    "execution_authorized",
+    "authorization_note"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "workflow_version": {"type": "string"},
+    "profile_id": {"type": "string"},
+    "profile_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "compute_environment_id": {"type": "string"},
+    "compute_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "host_environment_id": {"type": ["string", "null"]},
+    "host_snapshot_sha256": {
+      "anyOf": [
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "intent": {"enum": ["planning", "quick", "accurate", "auto", "visualization"]},
+    "selected_route": {
+      "enum": [
+        "browser-or-host-only",
+        "planning-host-assisted",
+        "planning-offline",
+        "hybrid-agent-hpc",
+        "hybrid-agent-ssh",
+        "hpc-offline",
+        "ssh-offline",
+        "workstation-online",
+        "workstation-offline"
+      ]
+    },
+    "selected_tree_mode": {
+      "enum": ["quick", "accurate", "materialized", null]
+    },
+    "compute_target": {"enum": ["local", "hpc", "ssh", "host-only"]},
+    "scheduler": {"enum": ["none", "pbs", "slurm", "lsf", "other"]},
+    "status": {
+      "enum": ["ready", "ready-with-limitations", "planning-only", "handoff-required", "blocked"]
+    },
+    "required_steps": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 10}},
+    "stages": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "allOf": [
+        {"contains": {"properties": {"step": {"const": 1}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 2}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 3}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 4}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 5}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 6}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 7}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 8}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 9}}, "required": ["step"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"step": {"const": 10}}, "required": ["step"]}, "minContains": 1, "maxContains": 1}
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step", "task", "status", "environment", "route", "software", "reason_code", "reason"],
+        "properties": {
+          "step": {"type": "integer", "minimum": 1, "maximum": 10},
+          "task": {"type": "string"},
+          "status": {"enum": ["ready", "conditional", "blocked", "skipped"]},
+          "environment": {"type": "string"},
+          "route": {"type": "string"},
+          "software": {"type": "array", "items": {"type": "string"}},
+          "reason_code": {"type": "string"},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "considered_routes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["route", "decision"],
+        "properties": {
+          "route": {"type": "string"},
+          "decision": {"type": "string"}
+        }
+      }
+    },
+    "blockers": {"type": "array", "items": {"type": "string"}},
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "used_tools": {"type": "array", "items": {"type": "string"}},
+    "resource_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requested_threads",
+        "observed_cpu_count",
+        "requested_memory_gb",
+        "observed_memory_gb",
+        "observed_scratch_free_gb",
+        "status",
+        "limitations"
+      ],
+      "properties": {
+        "requested_threads": {"type": "integer", "minimum": 1},
+        "observed_cpu_count": {"type": ["integer", "null"], "minimum": 1},
+        "requested_memory_gb": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "observed_memory_gb": {"type": ["number", "null"], "minimum": 0},
+        "observed_scratch_free_gb": {"type": ["number", "null"], "minimum": 0},
+        "status": {"enum": ["not-applicable", "within-observed-hints", "review-required"]},
+        "limitations": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "route_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "execution_authorized": {"const": false},
+    "authorization_note": {"type": "string"}
+  }
+}

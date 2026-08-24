@@ -1,6 +1,6 @@
 ---
 name: bio-gene-to-reference-tree
-description: Build an auditable protein gene tree from an accession, raw amino-acid sequence, or protein or gene name plus source organism. Use when an agent must resolve query metadata and exact NCBI TaxIDs from local taxdump files, classify gene-family conservation at an explicit taxonomic scope, curate ortholog or homolog references and outgroups, align and trim proteins, run FastTree or IQ-TREE2, generate iTOL or ggtree/ggplot2 outputs, or compare a gene tree with current phylogenetic literature. Require review gates before reference selection, alignment choice, and tree inference.
+description: Build an auditable protein gene tree from an accession, raw amino-acid sequence, or protein or gene name plus source organism. Use when an agent must select an environment-appropriate planning, workstation, or HPC route; resolve query metadata and exact NCBI TaxIDs from local taxdump files; classify gene-family conservation at an explicit taxonomic scope; curate references and outgroups; align and trim proteins; run FastTree or IQ-TREE2; generate iTOL or ggtree/ggplot2 outputs; or compare a gene tree with current literature. Require review gates before reference selection, alignment choice, and tree inference.
 ---
 
 # Gene to Reference Tree
@@ -44,6 +44,7 @@ Step 5 is conditional. Never cluster records whose `analysis_group` is `study` o
 ## Apply shared rules only when triggered
 
 - Read [taxonomy-resolution.md](references/taxonomy-resolution.md) before deriving or validating a TaxID from an organism name. Use one verified NCBI taxdump snapshot and accept only one character-for-character `scientific name` match whose node exists.
+- Read [environment-routing.md](references/environment-routing.md) before choosing an execution mode, using a capability fallback, or handing work to HPC/SSH. Snapshot the actual compute target, route every required step, and keep `route_hash` independent from the scientific `plan_hash`.
 - Read [tool-routing.md](references/tool-routing.md) before the first live lookup, unpublished-data submission, external executable, or capability fallback.
 - Read [recent-msa-trimming-evidence.md](references/recent-msa-trimming-evidence.md) when conservation classification or recent MSA/trimming precedent affects a decision; filter its [TSV catalog](references/recent-msa-trimming-evidence.tsv) by data architecture and scope.
 - Read [ggtree-visualization.md](references/ggtree-visualization.md) before local publication-oriented rendering.
@@ -66,7 +67,19 @@ Inspect optional local executables with:
 python3 <skill-root>/scripts/gene_to_tree.py doctor --json
 ```
 
-The host supplies separately authorized database, literature, browser, and shell capabilities. The bundled helper validates a materialized local handoff and compiles deterministic plans; it does not download databases, search literature, run MMseqs2/MAFFT/trimAl/FastTree/IQ-TREE2/R, root a tree, or upload to iTOL during `plan`.
+This default inspection only resolves command names on `PATH`; it launches no discovered executable. Use `--run-version-probes` only after approving local version/help commands and R namespace loading.
+
+For an environment-matched route, materialize a profile and snapshot, then run:
+
+```text
+python3 <skill-root>/scripts/gene_to_tree.py route \
+  --profile <environment-profile.json> \
+  --snapshot <environment-snapshot.json> \
+  --host-snapshot <optional-host-snapshot.json> \
+  --out <route-decision.json>
+```
+
+Neither environment command executes a workflow stage. Default `doctor` is passive `PATH` discovery; its opt-in active mode invokes only local version/help commands and R namespace checks, without claiming those programs are side-effect-free. A route decision is evidence of capability fit, not authorization. The host supplies separately authorized database, literature, browser, shell, file-transfer, and scheduler capabilities. The bundled helper validates materialized handoffs and compiles deterministic plans; it does not download databases, search literature, run workflow stages, connect by SSH, submit a scheduler job, or upload to iTOL during `plan` or `route`.
 
 ## Route unsupported analyses
 

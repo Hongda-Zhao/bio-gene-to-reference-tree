@@ -10,6 +10,7 @@ Read after the query is resolved and before choosing databases, sampling breadth
 - the user's biological question;
 - intended ingroup, taxonomic breadth, and comparison unit;
 - speed/accuracy preference and whether rooting is required;
+- current local/host/HPC capabilities, materialized inputs, and the environment route status;
 - viral, within-species, or codon-specific context when applicable.
 
 ## Procedure
@@ -42,6 +43,7 @@ For `sequence_context: viral`, define the homologous gene/segment explicitly. Re
 - explicit relationship, paralog, fragment, coverage, taxon-balance, and clustering policies;
 - declared rooting requirement and outgroup eligibility concept;
 - declared execution mode, deliverables, and privacy constraints;
+- selected workflow tier, compute target, `route_hash`, blockers/limitations, and any external handoff requiring later authorization;
 - a routing note for any out-of-scope request.
 
 ## Review gate and stop conditions
@@ -51,5 +53,6 @@ Do not begin discovery while the objective, ingroup, or relationship policy is a
 ## Supporting references
 
 - [Workflow states and decision gates](../workflow.md)
+- [Environment-aware software and workflow routing](../environment-routing.md)
 - [Tool and privacy boundaries](../tool-routing.md)
 - [Request and output contract](../output-contract.md)

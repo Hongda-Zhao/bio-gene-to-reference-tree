@@ -2,6 +2,8 @@
 
 Use the narrowest authoritative source or local executable available. Inspect capabilities and versions before use. Never claim a query or command ran when it was only planned.
 
+For the task-by-task software matrix, OS/HPC/browser support levels, environment profile, passive or opt-in active snapshots, deterministic route selection, and fallback statuses, read [environment-routing.md](environment-routing.md). A route decision does not authorize its network, upload, SSH, scheduler, or executable actions.
+
 ## Resolution and discovery routes
 
 | Need | Preferred route | Guardrail |
@@ -34,7 +36,7 @@ Do not average confidence values across orthology resources. Treat disagreement 
 | Tip annotation | Local iTOL-format writer | Upload only with separate remote permission |
 | Local tree figure | `Rscript` with bundled ggtree/ggplot2 renderer | Exact tip-ID join; SVG/PDF plus settings TSV; never install packages automatically |
 
-Before execution, run the bundled `doctor` command or inspect each executable with its version/help flag. If a required executable is missing or incompatible, stop after planning. Do not silently substitute another algorithm.
+Before execution, run the bundled `doctor` command on the actual compute target and compile an environment route. If a required executable is missing or incompatible, follow the route status and stop after planning when necessary. Do not silently substitute another algorithm.
 
 ## Literature and taxonomy routes
 
