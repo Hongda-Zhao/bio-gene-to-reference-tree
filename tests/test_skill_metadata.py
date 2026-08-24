@@ -16,6 +16,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = REPOSITORY_ROOT / "skills" / "bio-gene-to-reference-tree"
+COPILOT_SKILLS_ROOT = REPOSITORY_ROOT / ".github" / "skills"
 STEP_FILENAMES = (
     "01-resolve-query.md",
     "02-define-objective.md",
@@ -181,7 +182,19 @@ class SkillPackageTests(unittest.TestCase):
                 readme,
             )
         )
-        self.assertEqual(readme_steps, STEP_FILENAMES)
+        self.assertEqual(len(readme_steps), len(set(readme_steps)))
+        self.assertTrue(set(readme_steps) <= set(STEP_FILENAMES))
+        self.assertEqual(
+            readme_steps,
+            (
+                "01-resolve-query.md",
+                "04-select-references-and-outgroups.md",
+                "06-align-and-assess-conservation.md",
+                "08-infer-root-and-check-tree.md",
+                "09-annotate-and-visualize.md",
+                "10-compare-evidence-and-report.md",
+            ),
+        )
 
         for step_number, filename in enumerate(STEP_FILENAMES, start=1):
             with self.subTest(step=filename):
@@ -235,13 +248,13 @@ class SkillPackageTests(unittest.TestCase):
             (
                 "## What it does",
                 "## Install",
-                "## Progressive Skill",
-                "## Nucleotide quick start",
+                "## Nucleotide support",
                 "## BRCA1 example",
+                "## Progressive Skill",
                 "## Quick links",
             ),
         )
-        self.assertLessEqual(len(readme.splitlines()), 150)
+        self.assertLessEqual(len(readme.splitlines()), 160)
         self.assertLessEqual(len(readme.encode("utf-8")), 12_000)
 
         for required_link in (
@@ -250,6 +263,7 @@ class SkillPackageTests(unittest.TestCase):
             "(examples/brca1/README.md)",
             "(examples/brca1/figures/brca1-readme.svg)",
             "(examples/brca1/report/execution_reconciliation.json)",
+            "(.github/skills/bio-gene-to-reference-tree/SKILL.md)",
         ):
             self.assertIn(required_link, readme)
 
@@ -262,6 +276,151 @@ class SkillPackageTests(unittest.TestCase):
         ):
             self.assertNotIn(retired_heading, readme)
         self.assertNotIn("**Protocol-deviation notice.**", readme)
+
+    def test_github_copilot_task_adapters_are_thin_and_complete(self) -> None:
+        expected_adapters = (
+            "bio-gene-to-reference-tree",
+            "gene-tree-alignment-and-inference",
+            "gene-tree-environment-routing",
+            "gene-tree-query-and-scope",
+            "gene-tree-reference-curation",
+            "gene-tree-visualization-reporting",
+        )
+        actual_adapters = tuple(
+            path.name for path in sorted(COPILOT_SKILLS_ROOT.iterdir()) if path.is_dir()
+        )
+        self.assertEqual(actual_adapters, expected_adapters)
+
+        instructions = REPOSITORY_ROOT / ".github" / "copilot-instructions.md"
+        instructions_text = instructions.read_text(encoding="utf-8")
+        self.assertLessEqual(len(instructions_text.splitlines()), 12)
+        self.assertIn("sole canonical", instructions_text)
+        self.assertIn(".github/skills/", instructions_text)
+        self.assertIn("do not copy scientific policy", instructions_text)
+
+        expected_step_targets = {
+            "bio-gene-to-reference-tree": (),
+            "gene-tree-alignment-and-inference": STEP_FILENAMES[5:8],
+            "gene-tree-environment-routing": (),
+            "gene-tree-query-and-scope": STEP_FILENAMES[0:2],
+            "gene-tree-reference-curation": STEP_FILENAMES[2:5],
+            "gene-tree-visualization-reporting": STEP_FILENAMES[8:10],
+        }
+        expected_link_targets = {
+            "bio-gene-to-reference-tree": (
+                "../../../skills/bio-gene-to-reference-tree/SKILL.md",
+                "../../../skills/bio-gene-to-reference-tree/references/workflow.md",
+                "../gene-tree-query-and-scope/SKILL.md",
+                "../gene-tree-reference-curation/SKILL.md",
+                "../gene-tree-alignment-and-inference/SKILL.md",
+                "../gene-tree-visualization-reporting/SKILL.md",
+                "../gene-tree-environment-routing/SKILL.md",
+            ),
+            "gene-tree-alignment-and-inference": (
+                "../../../skills/bio-gene-to-reference-tree/SKILL.md",
+                "../../../skills/bio-gene-to-reference-tree/references/workflow.md",
+                "../../../skills/bio-gene-to-reference-tree/references/steps/06-align-and-assess-conservation.md",
+                "../../../skills/bio-gene-to-reference-tree/references/steps/07-trim-and-test-sensitivity.md",
+                "../../../skills/bio-gene-to-reference-tree/references/steps/08-infer-root-and-check-tree.md",
+            ),
+            "gene-tree-environment-routing": (
+                "../../../skills/bio-gene-to-reference-tree/SKILL.md",
+                "../../../skills/bio-gene-to-reference-tree/references/workflow.md",
+                "../../../skills/bio-gene-to-reference-tree/references/environment-routing.md",
+                "../../../skills/bio-gene-to-reference-tree/references/tool-routing.md",
+            ),
+            "gene-tree-query-and-scope": (
+                "../../../skills/bio-gene-to-reference-tree/SKILL.md",
+                "../../../skills/bio-gene-to-reference-tree/references/workflow.md",
+                "../../../skills/bio-gene-to-reference-tree/references/steps/01-resolve-query.md",
+                "../../../skills/bio-gene-to-reference-tree/references/steps/02-define-objective.md",
+                "../../../skills/bio-gene-to-reference-tree/references/sequence-type-routing.md",
+                "../../../skills/bio-gene-to-reference-tree/references/taxonomy-resolution.md",
+            ),
+            "gene-tree-reference-curation": (
+                "../../../skills/bio-gene-to-reference-tree/SKILL.md",
+                "../../../skills/bio-gene-to-reference-tree/references/workflow.md",
+                "../../../skills/bio-gene-to-reference-tree/references/steps/03-discover-candidates.md",
+                "../../../skills/bio-gene-to-reference-tree/references/steps/04-select-references-and-outgroups.md",
+                "../../../skills/bio-gene-to-reference-tree/references/steps/05-cluster-expanded-candidates.md",
+            ),
+            "gene-tree-visualization-reporting": (
+                "../../../skills/bio-gene-to-reference-tree/SKILL.md",
+                "../../../skills/bio-gene-to-reference-tree/references/workflow.md",
+                "../../../skills/bio-gene-to-reference-tree/references/steps/09-annotate-and-visualize.md",
+                "../../../skills/bio-gene-to-reference-tree/references/steps/10-compare-evidence-and-report.md",
+                "../../../skills/bio-gene-to-reference-tree/references/output-contract.md",
+            ),
+        }
+        local_link_pattern = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+        covered_steps: list[str] = []
+
+        for adapter_name in expected_adapters:
+            with self.subTest(adapter=adapter_name):
+                adapter_root = COPILOT_SKILLS_ROOT / adapter_name
+                self.assertFalse(any(path.is_symlink() for path in adapter_root.rglob("*")))
+                adapter_files = {
+                    path.relative_to(adapter_root)
+                    for path in adapter_root.rglob("*")
+                    if path.is_file()
+                }
+                self.assertEqual(adapter_files, {Path("SKILL.md")})
+
+                document = adapter_root / "SKILL.md"
+                content = document.read_text(encoding="utf-8")
+                lines = content.splitlines()
+                self.assertLessEqual(len(lines), 24)
+                self.assertEqual(lines[0], "---")
+                closing_index = lines[1:].index("---") + 1
+                frontmatter = "\n".join(lines[1:closing_index])
+                keys = re.findall(
+                    r"^([a-z_][a-z0-9_-]*):", frontmatter, flags=re.MULTILINE
+                )
+                self.assertEqual(keys, ["name", "description"])
+                self.assertIn(f"name: {adapter_name}", frontmatter)
+                self.assertRegex(frontmatter, r"(?m)^description:\s*\S.+$")
+                self.assertIn(
+                    "../../../skills/bio-gene-to-reference-tree/SKILL.md",
+                    content,
+                )
+                self.assertNotIn("TODO", content)
+
+                for forbidden_protocol_copy in (
+                    "mmseqs easy-linclust",
+                    "iqtree2 -s",
+                    '["trimal", "-in"',
+                    '"schema_version"',
+                ):
+                    self.assertNotIn(forbidden_protocol_copy, content)
+
+                local_link_targets = tuple(local_link_pattern.findall(content))
+                self.assertEqual(
+                    local_link_targets,
+                    expected_link_targets[adapter_name],
+                )
+                for raw_target in local_link_targets:
+                    if raw_target.startswith(("http://", "https://", "mailto:", "#")):
+                        continue
+                    relative_target = raw_target.split("#", 1)[0]
+                    resolved_target = (document.parent / relative_target).resolve()
+                    self.assertTrue(
+                        resolved_target.is_relative_to(REPOSITORY_ROOT.resolve()),
+                        f"Copilot adapter link escapes the repository: {document}: {raw_target}",
+                    )
+                    self.assertTrue(
+                        resolved_target.exists(),
+                        f"Broken Copilot adapter link: {document}: {raw_target}",
+                    )
+
+                step_links = re.findall(
+                    r"skills/bio-gene-to-reference-tree/references/steps/([^)#]+\.md)",
+                    content,
+                )
+                self.assertEqual(tuple(step_links), expected_step_targets[adapter_name])
+                covered_steps.extend(step_links)
+
+        self.assertEqual(tuple(sorted(covered_steps)), STEP_FILENAMES)
+        self.assertEqual(len(covered_steps), len(set(covered_steps)))
 
     def test_declared_resources_exist(self) -> None:
         expected = {
@@ -752,6 +911,24 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn("https://cursor.com/docs/skills", installation)
         self.assertIn("https://code.claude.com/docs/en/skills", installation)
         self.assertIn("https://code.claude.com/docs/en/plugin-marketplaces", installation)
+        self.assertIn(
+            "https://docs.github.com/en/copilot/concepts/agents/about-agent-skills",
+            installation,
+        )
+        self.assertIn(".github/copilot-instructions.md", installation)
+        self.assertIn(".github/skills/", installation)
+        self.assertIn(
+            "repository-local adapters, not separate installable packages",
+            readme,
+        )
+        self.assertIn(
+            "repository-local GitHub Copilot adapters and are not standalone packages",
+            installation,
+        )
+        self.assertIn(
+            "Do not copy one of the thin `.github/skills/` adapters by itself",
+            installation,
+        )
         self.assertIn(".codex/skills/bio-gene-to-reference-tree/", installation)
         self.assertIn("~/.codex/skills/bio-gene-to-reference-tree/", installation)
         self.assertIn(".cursor/skills/bio-gene-to-reference-tree/", installation)

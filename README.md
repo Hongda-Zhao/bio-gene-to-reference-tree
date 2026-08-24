@@ -5,7 +5,7 @@
 
 **Build the reference set before you build the tree.**
 
-[What it does](#what-it-does) · [Install](#install) · [Progressive Skill](#progressive-skill) · [Nucleotide quick start](#nucleotide-quick-start) · [BRCA1 example](#brca1-example) · [Quick links](#quick-links)
+[What it does](#what-it-does) · [Install](#install) · [Nucleotide support](#nucleotide-support) · [BRCA1 example](#brca1-example) · [Progressive Skill](#progressive-skill) · [Quick links](#quick-links)
 
 ## What it does
 
@@ -36,13 +36,14 @@ npx skills add Hongda-Zhao/bio-gene-to-reference-tree \
 
 For an explicit global client installation, add `--agent codex`, `--agent cursor`, or `--agent claude-code` together with `--global`.
 
-| Client | Invoke after installation |
+| Client | Entry point |
 |---|---|
 | Codex | `$bio-gene-to-reference-tree ...` |
 | Cursor | `/bio-gene-to-reference-tree ...` |
 | Claude Code | `/bio-gene-to-reference-tree ...` |
+| GitHub Copilot | Ask naturally; the matching project Skill is selected automatically |
 
-See [detailed installation](docs/installation.md) for global commands, manual directories, Cursor discovery, Claude Marketplace installation, and telemetry settings.
+See [detailed installation](docs/installation.md) for global commands, manual directories, project-level GitHub Copilot routing, Cursor discovery, Claude Marketplace installation, and telemetry settings.
 
 Minimal example:
 
@@ -50,43 +51,15 @@ Minimal example:
 $bio-gene-to-reference-tree Build an auditable ortholog protein tree for human BRCA1 NP_009225.1, retain the unrooted result, and evaluate amphibian outgroups.
 ```
 
-## Progressive Skill
+## Nucleotide support
 
-The installable package follows the open [Agent Skills specification](https://agentskills.io/specification) and uses progressive disclosure:
-
-| Level | Loaded content |
-|---:|---|
-| 0 | `SKILL.md` name and description for discovery |
-| 1 | The compact [Skill router](skills/bio-gene-to-reference-tree/SKILL.md) and [workflow gates](skills/bio-gene-to-reference-tree/references/workflow.md) |
-| 2 | Only the current task file from `references/steps/` |
-| 3 | Shared policy, contract, evidence, guide, asset, or script only when triggered |
-
-The ten task modules are directly addressable:
-
-| Step | Task |
-|---:|---|
-| 1 | [Resolve the query](skills/bio-gene-to-reference-tree/references/steps/01-resolve-query.md) |
-| 2 | [Define the objective](skills/bio-gene-to-reference-tree/references/steps/02-define-objective.md) |
-| 3 | [Discover candidates](skills/bio-gene-to-reference-tree/references/steps/03-discover-candidates.md) |
-| 4 | [Select references and outgroups](skills/bio-gene-to-reference-tree/references/steps/04-select-references-and-outgroups.md) |
-| 5 | [Cluster expanded candidates](skills/bio-gene-to-reference-tree/references/steps/05-cluster-expanded-candidates.md) |
-| 6 | [Align and assess conservation](skills/bio-gene-to-reference-tree/references/steps/06-align-and-assess-conservation.md) |
-| 7 | [Trim and test sensitivity](skills/bio-gene-to-reference-tree/references/steps/07-trim-and-test-sensitivity.md) |
-| 8 | [Infer, root, and check the tree](skills/bio-gene-to-reference-tree/references/steps/08-infer-root-and-check-tree.md) |
-| 9 | [Annotate and visualize](skills/bio-gene-to-reference-tree/references/steps/09-annotate-and-visualize.md) |
-| 10 | [Compare evidence and report](skills/bio-gene-to-reference-tree/references/steps/10-compare-evidence-and-report.md) |
-
-The router loads one step at a time and retains review gates before reference approval, alignment choice, and tree inference.
-
-## Nucleotide quick start
-
-Request schema 0.3 supports comparable noncoding DNA/RNA regions and clean coding DNA/RNA. It never guesses molecule type from sequence letters: noncoding nucleotide uses MAFFT `--nuc` plus a DNA tree model, while eligible clean CDS uses verified translations, protein-guided MAFFT, and trimAl `-backtrans`. A clean CDS request then explicitly chooses either an IQ-TREE codon model or a nucleotide-site DNA model on the codon-preserving alignment. Frameshifted or disrupted CDS stops for reviewed MACSE handling rather than being treated as ordinary nucleotide.
+Protein, noncoding DNA/RNA, and clean CDS are routed explicitly; molecule type is never inferred from sequence letters. Noncoding loci use nucleotide alignment and DNA models, clean CDS uses translation-guided codon-preserving alignment, and disrupted CDS stops for reviewed MACSE handling.
 
 ```text
 $bio-gene-to-reference-tree Build an auditable noncoding-dna gene tree from my resolved local FASTA, use only comparable homologous loci and an actual nucleotide search database, retain the unrooted tree, and report MAFFT --nuc plus IQ-TREE -st DNA commands.
 ```
 
-See the [minimal request 0.3 JSON](skills/bio-gene-to-reference-tree/assets/request.nucleotide.example.json) and [sequence-type router](skills/bio-gene-to-reference-tree/references/sequence-type-routing.md) for RNA source-encoding provenance, CDS QC, exact commands, and hard stops.
+See the [minimal nucleotide request](skills/bio-gene-to-reference-tree/assets/request.nucleotide.example.json) and [sequence-type router](skills/bio-gene-to-reference-tree/references/sequence-type-routing.md) for RNA/CDS details and hard stops.
 
 ## BRCA1 example
 
@@ -113,12 +86,61 @@ Orange marks the focal human sequence, green marks added references, and gray ma
 [execution reconciliation](examples/brca1/report/execution_reconciliation.json) ·
 [50-candidate expanded review](examples/brca1-expanded/README.md)
 
+## Progressive Skill
+
+The Agent layer translates a biological request into a reviewable, environment-matched plan. It loads only the active task guidance, preserves provenance and approval gates, and can hand approved work to local, browser, SSH, or HPC capabilities without changing the scientific plan.
+
+```mermaid
+flowchart TD
+    U[Biological request] --> D{Client discovery}
+    D -->|Codex, Cursor, Claude| C[Canonical SKILL.md]
+    D -->|GitHub Copilot| A[Thin task adapter]
+    A --> C
+    C --> T[One active step]
+    T --> P[Reviewable plan]
+    P --> E[Approved local / browser / SSH / HPC]
+    E --> O[Auditable tree and report]
+```
+
+The installable package follows the open [Agent Skills specification](https://agentskills.io/specification). GitHub Copilot gets thin project-level discovery adapters; every client then delegates to the same canonical router and progressively loaded task files:
+
+```text
+.
+├── .github/
+│   ├── copilot-instructions.md
+│   └── skills/                          # GitHub Copilot task discovery
+│       ├── bio-gene-to-reference-tree/SKILL.md
+│       ├── gene-tree-query-and-scope/SKILL.md
+│       ├── gene-tree-reference-curation/SKILL.md
+│       ├── gene-tree-alignment-and-inference/SKILL.md
+│       ├── gene-tree-visualization-reporting/SKILL.md
+│       └── gene-tree-environment-routing/SKILL.md
+└── skills/
+    └── bio-gene-to-reference-tree/
+        ├── SKILL.md                     # canonical router and core claims
+        ├── agents/openai.yaml           # discovery metadata
+        ├── references/
+        │   ├── workflow.md              # states and review gates
+        │   ├── steps/                   # load only the active task
+        │   │   ├── 01-resolve-query.md
+        │   │   ├── ...
+        │   │   └── 10-compare-evidence-and-report.md
+        │   ├── sequence-type-routing.md
+        │   ├── environment-routing.md
+        │   └── output-contract.md
+        ├── scripts/                     # deterministic helpers
+        └── assets/                      # minimal requests and data
+```
+
+The `.github/skills/` files are repository-local adapters, not separate installable packages. Task modules: [intake](skills/bio-gene-to-reference-tree/references/steps/01-resolve-query.md) · [sampling](skills/bio-gene-to-reference-tree/references/steps/04-select-references-and-outgroups.md) · [alignment](skills/bio-gene-to-reference-tree/references/steps/06-align-and-assess-conservation.md) · [tree inference](skills/bio-gene-to-reference-tree/references/steps/08-infer-root-and-check-tree.md) · [visualization](skills/bio-gene-to-reference-tree/references/steps/09-annotate-and-visualize.md) · [reporting](skills/bio-gene-to-reference-tree/references/steps/10-compare-evidence-and-report.md).
+
 ## Quick links
 
 | Need | Go to |
 |---|---|
-| Install on Codex, Cursor, or Claude Code | [Installation guide](docs/installation.md) |
+| Install on Codex, Cursor, Claude Code, or GitHub Copilot | [Installation guide](docs/installation.md) |
 | Read the agent entrypoint | [Canonical `SKILL.md`](skills/bio-gene-to-reference-tree/SKILL.md) |
+| Use the repository task layer | [GitHub Copilot orchestrator](.github/skills/bio-gene-to-reference-tree/SKILL.md) |
 | Follow states and approval gates | [Workflow](skills/bio-gene-to-reference-tree/references/workflow.md) |
 | Choose protein, noncoding nucleotide, or clean CDS analysis | [Sequence-type router](skills/bio-gene-to-reference-tree/references/sequence-type-routing.md) |
 | Match tasks to local, browser, or HPC capabilities | [Environment and software routing](skills/bio-gene-to-reference-tree/references/environment-routing.md) |
