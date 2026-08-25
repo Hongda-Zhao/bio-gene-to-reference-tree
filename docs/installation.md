@@ -2,9 +2,9 @@
 
 [Back to Install on the project homepage](../README.md#install)
 
-[skills CLI](#skills-cli) · [Invoke](#invoke) · [Claude Marketplace](#claude-code-marketplace) · [Manual locations](#manual-locations) · [Cursor Remote Rule](#cursor-remote-rule)
+[skills CLI](#skills-cli) · [Invoke](#invoke) · [GitHub Copilot](#github-copilot-project-skills) · [Claude Marketplace](#claude-code-marketplace) · [Manual locations](#manual-locations) · [Cursor Remote Rule](#cursor-remote-rule)
 
-Install the complete `skills/bio-gene-to-reference-tree/` package, not `SKILL.md` alone. Its relative links require the bundled `references/`, `scripts/`, and `assets/` directories.
+For a cross-client installation, install the complete `skills/bio-gene-to-reference-tree/` package, not `SKILL.md` alone. Its relative links require the bundled `references/`, `scripts/`, and `assets/` directories. The committed `.github/skills/` files are repository-local GitHub Copilot adapters and are not standalone packages.
 
 ## skills CLI
 
@@ -35,13 +35,22 @@ Omit `--global` for project scope. The third-party `skills` CLI reports anonymou
 
 ## Invoke
 
-| Client | Command |
+| Client | Entry point |
 |---|---|
 | Codex | `$bio-gene-to-reference-tree ...` |
 | Cursor 2.4+ | `/bio-gene-to-reference-tree ...` |
 | Claude Code | `/bio-gene-to-reference-tree ...` |
+| GitHub Copilot | Ask naturally; the matching project Skill is selected automatically |
 
 Cursor users can type `/` in Agent chat to discover the Skill. `Option+Enter` on macOS or `Alt+Enter` on Windows keeps it active as a Custom Mode for the session.
+
+## GitHub Copilot project Skills
+
+This repository keeps short task-discovery adapters in `.github/skills/` and repository-wide routing rules in `.github/copilot-instructions.md`. When Copilot selects an adapter, it follows links to the same canonical package used by Codex, Cursor, and Claude Code; the adapters do not copy the scientific protocol.
+
+No extra installation is needed while working in a clone or fork of this repository. Start with an end-to-end request or name a stage such as query resolution, reference curation, alignment and inference, visualization and reporting, or environment routing. GitHub documents `.github/skills/<skill-name>/SKILL.md` as a supported repository-level location in its official [Agent Skills guide](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills).
+
+To use the Skill in another repository, install or copy the complete canonical package into a location supported by that client. Do not copy one of the thin `.github/skills/` adapters by itself.
 
 ## Claude Code Marketplace
 
